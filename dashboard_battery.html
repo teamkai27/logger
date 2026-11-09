@@ -1,0 +1,1926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TEAM KAI Telemetry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #f0f2f5;
+    --bg2:     #ffffff;
+    --bg3:     #e4e7ec;
+    --border:  #c8cdd6;
+    --accent:  #0055aa;
+    --accent2: #cc4400;
+    --green:   #1a6b2a;
+    --yellow:  #b35c00;
+    --red:     #aa1111;
+    --text:    #111111;
+    --muted:   #555566;
+    --latch:   #e6a000;
+    --font:    'Rajdhani', sans-serif;
+    --mono:    'JetBrains Mono', monospace;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font); min-height:100vh; }
+
+  header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 20px; border-bottom:2px solid var(--border);
+    background:var(--bg2); position:sticky; top:0; z-index:100;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .logo { font-size:18px; font-weight:700; letter-spacing:0.1em; color:var(--accent); text-transform:uppercase; }
+  .logo span { color:var(--text); }
+  .status-bar { display:flex; align-items:center; gap:20px; font-family:var(--mono); font-size:11px; }
+  .ws-status { display:flex; align-items:center; gap:6px; }
+  .ws-dot { width:8px; height:8px; border-radius:50%; background:var(--red); transition:background 0.3s; }
+  .ws-dot.connected { background:var(--green); animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.5;} }
+  .uptime { color:var(--muted); }
+  .uptime span { color:var(--accent); font-weight:600; }
+
+  .grid {
+    display:grid; grid-template-columns:repeat(4,1fr);
+    gap:1px; background:var(--border);
+  }
+  .card { background:var(--bg2); padding:14px 18px; position:relative; overflow:hidden; }
+  .card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--border); transition:background 0.2s; }
+  .card.flash::before { background:var(--accent); }
+  .card-label { font-size:10px; font-weight:700; letter-spacing:0.15em; color:var(--muted); text-transform:uppercase; margin-bottom:8px; }
+  .card-value { font-family:var(--mono); font-size:36px; font-weight:500; color:var(--text); line-height:1; }
+  .card-unit  { font-size:13px; color:var(--muted); margin-left:3px; }
+  .card-sub   { font-size:11px; color:var(--muted); margin-top:5px; font-family:var(--mono); }
+
+  /* ── TRACK view ─────────────────────────────────────────── */
+  .trk-wrap { display:flex; gap:1px; background:var(--border); height:calc(100vh - 96px); }
+  .trk-main { flex:1; display:flex; flex-direction:column; background:var(--bg2); min-width:0; }
+  .trk-side { width:250px; flex-shrink:0; background:var(--bg2); display:flex; flex-direction:column; }
+  .trk-hud  { display:flex; align-items:center; gap:20px; padding:8px 16px;
+              border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .hud-item { line-height:1.1; }
+  .hud-k    { font-size:9px; font-weight:700; letter-spacing:0.14em; color:var(--muted); }
+  .hud-v    { font-family:var(--mono); font-size:19px; color:var(--text); }
+  .hud-big  { font-size:30px; color:var(--accent); }
+  .hud-sp   { flex:1; }
+  #trackCv  { flex:1; width:100%; display:block; cursor:grab; min-height:0; }
+  #trackCv:active { cursor:grabbing; }
+  .trk-ctl  { display:flex; align-items:center; gap:6px; padding:7px 14px;
+              border-top:1px solid var(--border); flex-wrap:wrap; }
+  .tbtn     { font-family:var(--mono); font-size:11px; font-weight:700; padding:5px 12px;
+              border:1px solid var(--border); background:var(--bg2); color:var(--text);
+              cursor:pointer; border-radius:3px; letter-spacing:0.05em; }
+  .tbtn:hover { background:var(--bg3); }
+  .tbtn-primary { border:2px solid var(--accent); color:var(--accent); }
+  .tbtn.on  { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .tsep     { width:1px; height:18px; background:var(--border); margin:0 4px; }
+  .tstat    { font-family:var(--mono); font-size:11px; color:var(--muted); margin-left:auto; }
+  .side-hd  { font-size:10px; font-weight:700; letter-spacing:0.15em; color:var(--muted);
+              padding:10px 12px; border-bottom:1px solid var(--border); }
+  .side-list{ flex:1; overflow-y:auto; }
+  .side-ft  { font-family:var(--mono); font-size:10px; color:var(--muted);
+              padding:8px 12px; border-top:1px solid var(--border); line-height:1.6; }
+  .lap-row  { display:flex; align-items:center; gap:7px; padding:7px 10px;
+              border-bottom:1px solid var(--bg3); font-family:var(--mono); font-size:12px; }
+  .lap-row.running { background:var(--bg3); }
+  .lap-row.hidden-lap { opacity:0.38; }
+  .lap-sw   { width:11px; height:11px; border-radius:2px; flex-shrink:0; }
+  .lap-no   { width:22px; color:var(--muted); }
+  .lap-t    { flex:1; font-size:13px; }
+  .lap-best { color:var(--green); font-weight:600; }
+  .lap-ico  { cursor:pointer; color:var(--muted); font-size:12px; padding:0 2px; background:none; border:none; }
+  .lap-ico:hover { color:var(--accent); }
+  .wide2 { grid-column:span 2; }
+  .wide4 { grid-column:span 4; }
+  .card-rpm .card-value { font-size:52px; color:var(--accent); }
+
+  .temp-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px; }
+  .temp-label { font-size:10px; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; }
+  .temp-value { font-family:var(--mono); font-size:24px; font-weight:600; color:var(--green); transition:color 0.3s; }
+  .temp-value.warn { color:var(--yellow); }
+  .temp-value.hot  { color:var(--red); }
+
+  .state-badge {
+    display:inline-block; font-size:17px; font-weight:700; letter-spacing:0.1em;
+    padding:4px 12px; border-radius:3px;
+    border:2px solid var(--border); color:var(--text);
+    background:var(--bg3); text-transform:uppercase; transition:all 0.3s; margin-top:4px;
+  }
+  .state-badge.ready      { border-color:var(--green);  color:var(--green);  background:#e8f5e9; }
+  .state-badge.active     { border-color:var(--accent);  color:var(--accent); background:#e3f0ff; }
+  .state-badge.standby    { border-color:var(--yellow);  color:var(--yellow); background:#fff3e0; }
+  .state-badge.fault-soft { border-color:var(--yellow);  color:var(--yellow); background:#fff3e0; animation:blink 1s infinite; }
+  .state-badge.fault-hard { border-color:var(--red);     color:var(--red);    background:#ffebee; animation:blink 0.5s infinite; }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  .bitfield { display:flex; gap:4px; flex-wrap:wrap; margin-top:6px; }
+  .bit {
+    font-size:9px; padding:2px 6px; border-radius:2px;
+    background:var(--bg3); border:1px solid var(--border);
+    color:var(--muted); font-family:var(--mono); text-transform:uppercase;
+    transition:all 0.2s;
+  }
+  .bit.active { background:#ffebee; border-color:var(--red); color:var(--red); font-weight:700; }
+  .bit.latched { background:#fff3d6; border-color:var(--latch); color:var(--latch); font-weight:700; }
+
+  .power-row { display:flex; justify-content:space-between; align-items:baseline; padding:3px 0; }
+  .power-label { font-size:11px; color:var(--muted); text-transform:uppercase; }
+  .power-value { font-family:var(--mono); font-size:22px; color:var(--text); }
+
+  /* Fault History */
+  .fh-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .fh-clear {
+    font-family:var(--mono); font-size:10px; padding:4px 12px; border-radius:3px;
+    background:var(--bg3); border:1px solid var(--border); color:var(--text);
+    cursor:pointer; text-transform:uppercase; letter-spacing:0.05em; transition:all 0.15s;
+  }
+  .fh-clear:hover { background:var(--red); color:#fff; border-color:var(--red); }
+  .fh-table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11px; }
+  .fh-table th {
+    text-align:left; padding:4px 8px; color:var(--muted); font-weight:600;
+    font-size:9px; text-transform:uppercase; letter-spacing:0.08em; border-bottom:2px solid var(--border);
+  }
+  .fh-table td { padding:5px 8px; border-bottom:1px solid var(--border); }
+  .fh-table tr:hover { background:var(--bg3); }
+  .fh-row-active td  { color:var(--red); }
+  .fh-row-latched td { color:var(--latch); }
+  .fh-badge {
+    display:inline-block; padding:1px 6px; border-radius:2px; font-size:9px; font-weight:700;
+    text-transform:uppercase;
+  }
+  .fh-badge.active  { background:#ffebee; color:var(--red);   border:1px solid var(--red); }
+  .fh-badge.latched { background:#fff3d6; color:var(--latch); border:1px solid var(--latch); }
+  .fh-ack {
+    cursor:pointer; color:var(--muted); font-size:13px; padding:0 6px;
+    user-select:none; transition:color 0.15s;
+  }
+  .fh-ack:hover { color:var(--red); }
+  .fh-empty { color:var(--green); font-family:var(--mono); font-size:11px; padding:8px; }
+  .fh-level { display:inline-block; width:24px; font-weight:700; color:var(--muted); }
+
+  footer {
+    padding:8px 20px; border-top:1px solid var(--border); background:var(--bg2);
+    display:flex; justify-content:space-between; font-family:var(--mono); font-size:10px; color:var(--muted);
+    box-shadow: 0 -1px 4px rgba(0,0,0,0.05);
+  }
+  footer span { color:var(--accent); font-weight:600; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">TEAM<span> KAI</span> TELEMETRY</div>
+  <div class="status-bar">
+    <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:4px;overflow:hidden">
+      <button id="viewInv" onclick="setView('inv')" style="font-family:var(--mono);font-size:11px;font-weight:700;padding:5px 14px;border:none;background:var(--accent);color:#fff;cursor:pointer;letter-spacing:0.05em">INVERTER</button>
+      <button id="viewBat" onclick="setView('bat')" style="font-family:var(--mono);font-size:11px;font-weight:700;padding:5px 14px;border:none;background:var(--bg2);color:var(--text);cursor:pointer;letter-spacing:0.05em">BATTERY</button>
+      <button id="viewTrk" onclick="setView('trk')" style="font-family:var(--mono);font-size:11px;font-weight:700;padding:5px 14px;border:none;background:var(--bg2);color:var(--text);cursor:pointer;letter-spacing:0.05em">TRACK</button>
+      <button id="viewMot" onclick="setView('mot')" style="font-family:var(--mono);font-size:11px;font-weight:700;padding:5px 14px;border:none;background:var(--bg2);color:var(--text);cursor:pointer;letter-spacing:0.05em">MOTION</button>
+    </div>
+    <button id="recBtn" onclick="toggleRec()" style="font-family:var(--mono);font-size:11px;font-weight:700;padding:5px 14px;border-radius:3px;border:2px solid var(--red);background:var(--bg2);color:var(--red);cursor:pointer;letter-spacing:0.08em">● REC</button>
+    <span id="recTime" style="font-family:var(--mono);font-size:11px;color:var(--red);display:none">00:00</span>
+    <div class="ws-status">
+      <div class="ws-dot" id="wsDot"></div>
+      <span id="wsLabel">DISCONNECTED</span>
+    </div>
+    <div class="uptime">UPTIME <span id="uptimeVal">--:--:--</span></div>
+    <div class="uptime">CPU0 <span id="cpu0Val">--</span>% &nbsp; CPU1 <span id="cpu1Val">--</span>%</div>
+    <div class="uptime">LAT <span id="latVal">--</span>ms</div>
+  </div>
+</header>
+
+<div class="grid" id="gridInv">
+
+  <!-- MAX FEASIBLE TORQUE (top) -->
+  <div class="card wide4" id="card-maxtorque">
+    <div class="card-label">Max Feasible Torque (Torque_Max_Feas)</div>
+    <div class="card-value" id="torqueMaxFeas" style="color:var(--accent2)">--<span class="card-unit">Nm</span></div>
+  </div>
+
+  <!-- MOTOR SPEED -->
+  <div class="card card-rpm wide2" id="card-rpm">
+    <div class="card-label">Motor Speed</div>
+    <div style="display:flex;align-items:baseline;gap:24px">
+      <div class="card-value" id="rpm">----<span class="card-unit">RPM</span></div>
+      <div style="font-family:var(--mono);font-size:34px;color:var(--accent2)" id="speed">--<span class="card-unit">km/h</span></div>
+    </div>
+    <div class="card-sub">erpm: <span id="erpm">----</span></div>
+  </div>
+
+  <!-- CURRENT SETPOINT (was Estimated Torque) -->
+  <div class="card" id="card-setpoint">
+    <div class="card-label">Current Setpoint (App)</div>
+    <div style="display:flex;gap:16px;margin-top:4px">
+      <div style="flex:1">
+        <div class="temp-label">Q-axis setpoint</div>
+        <div style="font-family:var(--mono);font-size:30px;color:var(--green)"><span id="iq_sp">--</span><span class="card-unit">A</span></div>
+      </div>
+      <div style="flex:1;border-left:1px solid var(--border);padding-left:16px">
+        <div class="temp-label">D-axis setpoint</div>
+        <div style="font-family:var(--mono);font-size:30px;color:var(--muted)"><span id="id_sp">--</span><span class="card-unit">A</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TORQUE COMMAND -->
+  <div class="card" id="card-tlim">
+    <div class="card-label">Torque Command (VCU)</div>
+    <div style="margin-top:6px">
+      <span style="font-size:11px;color:var(--muted)">REQ</span>
+      <span id="torqueReq" style="font-family:var(--mono);font-size:26px;color:var(--accent);margin-left:8px">--</span>
+      <span class="card-unit">Nm</span>
+    </div>
+    <div class="card-sub">LIM+ <span id="tlimPos">--</span> &nbsp; LIM- <span id="tlimNeg">--</span></div>
+  </div>
+
+  <!-- PHASE CURRENT + TORQUE graph -->
+  <div class="card wide4" id="card-current">
+    <div class="card-label">Phase Current (measured) &amp; Estimated Torque</div>
+    <div style="display:flex;gap:0;margin-top:4px">
+      <div style="display:flex;flex-direction:column;gap:10px;min-width:240px;flex-shrink:0">
+        <div>
+          <div class="temp-label">Q-axis measured</div>
+          <div style="font-family:var(--mono);font-size:28px;color:var(--accent);width:110px;display:inline-block;text-align:right" id="iq_num">--</div><span class="card-unit">A</span>
+        </div>
+        <div>
+          <div class="temp-label">D-axis measured</div>
+          <div style="font-family:var(--mono);font-size:28px;color:var(--muted);width:110px;display:inline-block;text-align:right" id="id_num">--</div><span class="card-unit">A</span>
+        </div>
+        <div>
+          <div class="temp-label">Estimated torque</div>
+          <div style="font-family:var(--mono);font-size:28px;color:var(--accent2);width:110px;display:inline-block;text-align:right" id="torque_num">--</div><span class="card-unit">Nm</span>
+        </div>
+        <div>
+          <div class="temp-label">Vmod</div>
+          <div style="font-family:var(--mono);font-size:20px;color:var(--muted);width:110px;display:inline-block;text-align:right" id="vmod">--</div><span class="card-unit">&#8240;</span>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:2px">
+          <span style="font-family:var(--mono);font-size:10px;color:var(--accent)">─ Iq meas</span>
+          <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">─ Id meas</span>
+          <span style="font-family:var(--mono);font-size:10px;color:var(--accent2)">─ Torque</span>
+          <span style="font-family:var(--mono);font-size:10px;color:var(--red)">| OCP</span>
+        </div>
+      </div>
+      <div style="flex:1;min-width:0;padding-left:16px">
+        <canvas id="currentChart" style="width:100%;height:170px;display:block"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- HV DC BUS -->
+  <div class="card" id="card-dcbus">
+    <div class="card-label">HV DC Bus</div>
+    <div class="card-value" id="dcVolt">---<span class="card-unit">V</span></div>
+    <div class="card-sub">LV supply: <span id="lvVolt">--.-</span> V</div>
+  </div>
+
+  <!-- POWER -->
+  <div class="card" id="card-power">
+    <div class="card-label">Power</div>
+    <div class="power-row">
+      <span class="power-label">AC OUT</span>
+      <span class="power-value" id="acPower">---- <span class="card-unit">W</span></span>
+    </div>
+  </div>
+
+  <!-- TEMPERATURE -->
+  <div class="card wide2" id="card-temp">
+    <div class="card-label">Temperature</div>
+    <div class="temp-grid">
+      <div><div class="temp-label">Board</div><div class="temp-value" id="board1Temp">--<span style="font-size:13px">°C</span></div></div>
+      <div><div class="temp-label">Power Stage</div><div class="temp-value" id="board2Temp">--<span style="font-size:13px">°C</span></div></div>
+      <div><div class="temp-label">Motor NTC1</div><div class="temp-value" id="pwrTemp">--<span style="font-size:13px">°C</span></div></div>
+      <div><div class="temp-label">Motor NTC2</div><div class="temp-value" id="mTemp1">--<span style="font-size:13px">°C</span></div></div>
+    </div>
+  </div>
+
+  <!-- INVERTER STATE -->
+  <div class="card" id="card-state">
+    <div class="card-label">Inverter State</div>
+    <div class="state-badge" id="stateBadge">INIT</div>
+    <div class="card-sub" style="margin-top:8px">Type: <span id="ctrlType">--</span> &nbsp; Mode: <span id="ctrlMode">--</span></div>
+    <div class="card-sub">PosFb: <span id="posFb">--</span></div>
+  </div>
+
+  <!-- LIVE DEM -->
+  <div class="card" id="card-dem">
+    <div class="card-label">DEM (live)</div>
+    <div id="demLive" style="font-family:var(--mono);font-size:11px;margin-top:6px">
+      <span style="color:var(--green)">OK</span>
+    </div>
+  </div>
+
+  <!-- BITFIELDS (live) -->
+  <div class="card wide4" id="card-bits">
+    <div class="card-label">Power Stage Bits (L1, live)</div>
+    <div class="bitfield">
+      <span class="bit" id="bit-alive">ALIVE</span>
+      <span class="bit" id="bit-enable">ENABLE</span>
+      <span class="bit" id="bit-uv">UNDERVOLT</span>
+      <span class="bit" id="bit-dead">DEAD</span>
+      <span class="bit" id="bit-disnf">DISNF</span>
+      <span class="bit" id="bit-nopwr">NOPWR</span>
+      <span class="bit" id="bit-ocp">OCP</span>
+      <span class="bit" id="bit-ovp">OVP</span>
+    </div>
+    <div class="card-label" style="margin-top:10px">FOC Control Bits (L2, live)</div>
+    <div class="bitfield">
+      <span class="bit" id="foc-ready">READY</span>
+      <span class="bit" id="foc-posfail">POSFAIL</span>
+      <span class="bit" id="foc-asc">ASC</span>
+      <span class="bit" id="foc-imbal">CUR_IMBAL</span>
+    </div>
+  </div>
+
+  <!-- FAULT HISTORY -->
+  <div class="card wide4" id="card-history">
+    <div class="fh-header">
+      <div class="card-label" style="margin-bottom:0">Fault History (latched)</div>
+      <button class="fh-clear" onclick="clearAllFaults()">Clear All</button>
+    </div>
+    <table class="fh-table">
+      <thead>
+        <tr>
+          <th style="width:40px">Lv</th>
+          <th style="width:90px">Status</th>
+          <th>Fault</th>
+          <th style="width:60px">Count</th>
+          <th style="width:90px">First</th>
+          <th style="width:90px">Last</th>
+          <th style="width:40px">Ack</th>
+        </tr>
+      </thead>
+      <tbody id="fhBody">
+        <tr><td colspan="7"><div class="fh-empty">No faults recorded — all clear</div></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- ===================== BATTERY VIEW ===================== -->
+<div class="grid" id="gridBat" style="display:none">
+
+  <!-- PACK CURRENT -->
+  <div class="card card-rpm wide2" id="bcard-current">
+    <div class="card-label">Pack Current</div>
+    <div style="display:flex;gap:16px;align-items:baseline">
+      <div>
+        <div class="card-value" id="packCurrent" style="color:var(--accent)">--<span class="card-unit">A</span></div>
+        <div class="card-sub" id="packCurrentDir">순시 · —</div>
+      </div>
+      <div style="border-left:1px solid var(--border);padding-left:16px">
+        <div class="temp-label">Average</div>
+        <div style="font-family:var(--mono);font-size:30px;color:var(--accent2)"><span id="packAvgCurrent">--</span><span class="card-unit">A</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CURRENT LIMITS -->
+  <div class="card wide2" id="bcard-limits">
+    <div class="card-label">Current Limits</div>
+    <div style="display:flex;gap:16px;margin-top:4px">
+      <div style="flex:1">
+        <div class="temp-label">Discharge (DCL)</div>
+        <div style="font-family:var(--mono);font-size:30px;color:var(--accent2)"><span id="packDCL">--</span><span class="card-unit">A</span></div>
+      </div>
+      <div style="flex:1;border-left:1px solid var(--border);padding-left:16px">
+        <div class="temp-label">Charge (CCL)</div>
+        <div style="font-family:var(--mono);font-size:30px;color:var(--green)"><span id="packCCL">--</span><span class="card-unit">A</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PACK SUMMED VOLTAGE -->
+  <div class="card wide2" id="bcard-packv">
+    <div class="card-label">Pack Summed Voltage</div>
+    <div class="card-value" id="packVoltage" style="color:var(--accent)">--<span class="card-unit">V</span></div>
+    <div class="card-sub">내장 Orion DBC 기준 환산값</div>
+  </div>
+
+  <!-- LOW CELL VOLTAGE -->
+  <div class="card wide2" id="bcard-cellv">
+    <div class="card-label">Low Cell Voltage</div>
+    <div class="card-value" id="lowCellV" style="color:var(--accent)">--<span class="card-unit">V</span></div>
+    <div class="card-sub">최저 셀 (가장 먼저 방전되는 셀)</div>
+  </div>
+
+  <!-- TEMPERATURE -->
+  <div class="card wide2" id="bcard-temp">
+    <div class="card-label">Pack Temperature</div>
+    <div style="display:flex;gap:16px;margin-top:4px">
+      <div style="flex:1">
+        <div class="temp-label">High</div>
+        <div class="temp-value" id="batHighTemp">--<span style="font-size:13px">°C</span></div>
+      </div>
+      <div style="flex:1;border-left:1px solid var(--border);padding-left:16px">
+        <div class="temp-label">Average</div>
+        <div class="temp-value" id="batAvgTemp">--<span style="font-size:13px">°C</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PACK CURRENT GRAPH -->
+  <div class="card wide4" id="bcard-igraph">
+    <div class="card-label">Pack Current (10s)
+      <span style="float:right;font-family:var(--mono);font-weight:400;letter-spacing:0">
+        <span style="color:#0055aa">━</span> 순시
+        <span style="color:#cc4400;margin-left:8px">━</span> 평균
+      </span>
+    </div>
+    <canvas id="batCurrentChart" style="width:100%;height:150px;display:block;margin-top:6px"></canvas>
+  </div>
+
+  <!-- PACK SUMMED VOLTAGE GRAPH -->
+  <div class="card wide4" id="bcard-packvgraph">
+    <div class="card-label">Pack Summed Voltage (실시간 · 최근 10초)</div>
+    <canvas id="batPackVoltChart" style="width:100%;height:150px;display:block;margin-top:6px"></canvas>
+  </div>
+
+  <!-- CELL VOLTAGE GRAPH -->
+  <div class="card wide4" id="bcard-vgraph">
+    <div class="card-label">Low Cell Voltage (10s)</div>
+    <canvas id="batVoltChart" style="width:100%;height:150px;display:block;margin-top:6px"></canvas>
+  </div>
+
+</div>
+
+<!-- ===================== TRACK VIEW (GPS) ===================== -->
+<div id="gridTrk" style="display:none">
+  <div class="trk-wrap">
+    <div class="trk-main">
+      <div class="trk-hud">
+        <div class="hud-item"><div class="hud-k">LAP</div><div class="hud-v" id="tLapNo">--</div></div>
+        <div class="hud-item"><div class="hud-k">CURRENT</div><div class="hud-v hud-big" id="tLapTime">--:--.-</div></div>
+        <div class="hud-item"><div class="hud-k">LAST</div><div class="hud-v" id="tLastLap">--:--.-</div></div>
+        <div class="hud-item"><div class="hud-k">BEST</div><div class="hud-v" id="tBestLap" style="color:var(--green)">--:--.-</div></div>
+        <div class="hud-sp"></div>
+        <div class="hud-item"><div class="hud-k">SPEED</div><div class="hud-v hud-big" id="tSpeed">--<span class="card-unit">km/h</span></div></div>
+        <div class="hud-item"><div class="hud-k">SAT</div><div class="hud-v" id="tSats">--</div></div>
+        <div class="hud-item"><div class="hud-k">HDOP</div><div class="hud-v" id="tHdop">--</div></div>
+        <div class="hud-item"><div class="hud-k">FIX</div><div class="hud-v" id="tFix">NO DATA</div></div>
+      </div>
+      <canvas id="trackCv"></canvas>
+      <div class="trk-ctl">
+        <button class="tbtn tbtn-primary" onclick="manualLap()">◀ LAP</button>
+        <button class="tbtn" onclick="setSF()" id="btnSF">SET S/F</button>
+        <button class="tbtn" onclick="toggleAuto()" id="btnAuto">AUTO ○</button>
+        <span class="tsep"></span>
+        <button class="tbtn" onclick="fitView()">FIT</button>
+        <button class="tbtn" onclick="zoomBy(1.3)">+</button>
+        <button class="tbtn" onclick="zoomBy(1/1.3)">−</button>
+        <span class="tsep"></span>
+        <button class="tbtn" onclick="clearAllLaps()">CLEAR ALL</button>
+        <button class="tbtn" onclick="exportLaps()">EXPORT</button>
+        <span class="tstat" id="trkStat">0 pts</span>
+      </div>
+    </div>
+    <div class="trk-side">
+      <div class="side-hd">LAPS</div>
+      <div class="side-list" id="lapList"></div>
+      <div class="side-ft">
+        <div>drag = pan &nbsp; wheel = zoom</div>
+        <div id="sfStat">S/F not set</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MOTION VIEW (IMU) ===================== -->
+<div class="grid" id="gridMot" style="display:none">
+
+  <div class="card wide2" id="mcard-gg" style="grid-row:span 2">
+    <div class="card-label">g-g Diagram &mdash; traction circle (50 Hz, last 5 s)</div>
+    <canvas id="ggCv" style="width:100%;height:400px;display:block"></canvas>
+  </div>
+
+  <div class="card wide2" id="mcard-num">
+    <div class="card-label">Acceleration &amp; Yaw Rate</div>
+    <div style="display:flex;gap:0;margin-top:4px">
+      <div style="flex:1">
+        <div class="temp-label">Longitudinal X</div>
+        <div style="font-family:var(--mono);font-size:34px;color:var(--accent)"><span id="mAx">--</span><span class="card-unit">g</span></div>
+      </div>
+      <div style="flex:1;border-left:1px solid var(--border);padding-left:14px">
+        <div class="temp-label">Lateral Y</div>
+        <div style="font-family:var(--mono);font-size:34px;color:var(--accent2)"><span id="mAy">--</span><span class="card-unit">g</span></div>
+      </div>
+      <div style="flex:1;border-left:1px solid var(--border);padding-left:14px">
+        <div class="temp-label">Yaw rate</div>
+        <div style="font-family:var(--mono);font-size:34px;color:var(--green)"><span id="mWz">--</span><span class="card-unit">&deg;/s</span></div>
+      </div>
+    </div>
+    <div class="card-sub">Z <span id="mAz">--</span> g &nbsp; |a| <span id="mAmag">--</span> g &nbsp; peak long <span id="mPkX">--</span> &nbsp; peak lat <span id="mPkY">--</span>
+      &nbsp;<button class="tbtn" style="padding:1px 6px" onclick="resetPeaks()">RESET</button></div>
+  </div>
+
+  <div class="card wide2" id="mcard-att">
+    <div class="card-label">Attitude &amp; Link</div>
+    <div style="display:flex;gap:0;margin-top:4px">
+      <div style="flex:1">
+        <div class="temp-label">Roll</div>
+        <div style="font-family:var(--mono);font-size:26px"><span id="mRoll">--</span><span class="card-unit">&deg;</span></div>
+      </div>
+      <div style="flex:1;border-left:1px solid var(--border);padding-left:14px">
+        <div class="temp-label">Pitch</div>
+        <div style="font-family:var(--mono);font-size:26px"><span id="mPitch">--</span><span class="card-unit">&deg;</span></div>
+      </div>
+      <div style="flex:1;border-left:1px solid var(--border);padding-left:14px">
+        <div class="temp-label">Yaw (6-axis)</div>
+        <div style="font-family:var(--mono);font-size:26px;color:var(--muted)"><span id="mYaw">--</span><span class="card-unit">&deg;</span></div>
+      </div>
+    </div>
+    <div class="card-sub">UTC <span id="mUtc">--</span> &nbsp; MSG/s <span id="mRate">--</span> &nbsp; TEMP <span id="mTemp">--</span>&deg;C &nbsp; LAST <span id="mLast">--</span></div>
+  </div>
+
+  <div class="card wide2" id="mcard-cal">
+    <div class="card-label">Speed Calibration &mdash; GPS 실측으로 환산계수 확정</div>
+    <div style="display:flex;gap:0;margin-top:4px">
+      <div style="flex:1">
+        <div class="temp-label">Motor derived</div>
+        <div style="font-family:var(--mono);font-size:26px;color:var(--accent)"><span id="calMotor">--</span><span class="card-unit">km/h</span></div>
+      </div>
+      <div style="flex:1;border-left:1px solid var(--border);padding-left:14px">
+        <div class="temp-label">GPS ground</div>
+        <div style="font-family:var(--mono);font-size:26px;color:var(--accent2)"><span id="calGps">--</span><span class="card-unit">km/h</span></div>
+      </div>
+      <div style="flex:1;border-left:1px solid var(--border);padding-left:14px">
+        <div class="temp-label">Error</div>
+        <div style="font-family:var(--mono);font-size:26px"><span id="calErr">--</span><span class="card-unit">%</span></div>
+      </div>
+    </div>
+    <div class="card-sub" style="line-height:1.8">
+      현재 계수 <span id="calCur" style="font-family:var(--mono);color:var(--accent)">--</span>
+      &nbsp; 표본 <span id="calN">0</span>
+      &nbsp; 제안 <span id="calSug" style="font-family:var(--mono);color:var(--green);font-size:14px">--</span><br>
+      <button class="tbtn" onclick="applyCal()">제안값 적용</button>
+      <button class="tbtn" onclick="resetCal()">표본 초기화</button>
+      <span id="calHint" style="color:var(--muted)">20 km/h 이상 · 정속 · HDOP&lt;3 구간만 수집</span>
+    </div>
+  </div>
+
+  <div class="card wide2" id="mcard-axis">
+    <div class="card-label">Axis Mapping &mdash; 센서 원본 축 &rarr; 차량 축 (ISO 8855: X 전방 / Y 좌측 / Z 상방)</div>
+    <div style="display:flex;gap:24px;align-items:center;margin-top:6px;flex-wrap:wrap;font-family:var(--mono);font-size:12px">
+      <div>LONG (전방 +) <select id="axLong" onchange="setAxis()"></select></div>
+      <div>LAT (우측 +) <select id="axLat" onchange="setAxis()"></select></div>
+      <div>VERT (상방 +) <select id="axVert" onchange="setAxis()"></select></div>
+      <div>YAW (시계+) <select id="axYaw" onchange="setAxis()"></select></div>
+      <button class="tbtn" onclick="axisWizard()">확인 도우미</button>
+      <span id="axStat" style="color:var(--muted)"></span>
+    </div>
+    <div class="card-sub" id="axRaw">raw &nbsp; ax -- &nbsp; ay -- &nbsp; az -- &nbsp; wx -- &nbsp; wy -- &nbsp; wz --</div>
+  </div>
+
+  <div class="card wide4" id="mcard-ts">
+    <div class="card-label">Time Series &mdash; last 30 s @ 50 Hz</div>
+    <canvas id="tsCv" style="width:100%;height:300px;display:block"></canvas>
+  </div>
+
+</div>
+
+<footer>
+  <div>MSG/s <span id="msgRate">0</span></div>
+  <div>LAST UPDATE <span id="lastUpdate">--:--:--</span></div>
+  <div>TEAM KAI · W90 INVERTER + BMS · CAN1 500kbps</div>
+</footer>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// DBC Signal definitions (verified against candump, little-endian)
+// ─────────────────────────────────────────────────────────────
+const DBC = {
+  0x460: {
+    Uptime_ms:           { start:0,  len:32, signed:false, factor:1, offset:0 },
+    Core_0_Load_percent: { start:32, len:8,  signed:false, factor:1, offset:0 },
+    Core_1_Load_percent: { start:40, len:8,  signed:false, factor:1, offset:0 },
+  },
+  0x461: {
+    DEM_Code:            { start:16, len:15, signed:false, factor:1, offset:0 },
+    DEM_Present:         { start:31, len:1,  signed:false, factor:1, offset:0 },
+    App_State_App:       { start:32, len:7,  signed:false, factor:1, offset:0 },
+    EMCtrl_FOC_BitState: { start:39, len:8,  signed:false, factor:1, offset:0 },
+    PwrStg_BitState:     { start:47, len:9,  signed:false, factor:1, offset:0 },
+  },
+  0x463: {
+    Current_D_A:         { start:0,  len:16, signed:true,  factor:0.03125, offset:0 },
+    Current_Q_A:         { start:16, len:16, signed:true,  factor:0.03125, offset:0 },
+    Volt_Modulus_permil: { start:32, len:12, signed:false, factor:1,       offset:0 },
+    EMachine_Speed_erpm: { start:44, len:20, signed:true,  factor:1,       offset:0 },
+  },
+  0x464: {
+    Board_Temp_degC:      { start:0,  len:8, signed:false, factor:1, offset:-50 },
+    PwrStg_Temp_degC:     { start:8,  len:8, signed:false, factor:1, offset:-50 },
+    EMachine_Temp_1_degC: { start:16, len:8, signed:false, factor:1, offset:-50 },
+    EMachine_Temp_2_degC: { start:24, len:8, signed:false, factor:1, offset:-50 },
+  },
+  0x465: {
+    Cmd_Src_App:   { start:0,  len:4,  signed:false, factor:1, offset:0 },
+    Ctrl_Type_App: { start:4,  len:4,  signed:false, factor:1, offset:0 },
+    Ctrl_Mode_App: { start:8,  len:4,  signed:false, factor:1, offset:0 },
+    PosFb_Src_App: { start:12, len:4,  signed:false, factor:1, offset:0 },
+    KL30Volt_mV:   { start:16, len:16, signed:false, factor:1, offset:0 },
+  },
+  0x466: {
+    DCBus_Voltage_V: { start:16, len:10, signed:false, factor:1,      offset:0 },
+    ACBus_Power_W:   { start:26, len:16, signed:true,  factor:32.767, offset:0 },
+  },
+  0x467: {
+    Torque_Max_Feas_Ndm: { start:0,  len:16, signed:true,  factor:1,       offset:0 },
+    Setpoint_App_D_A:    { start:16, len:16, signed:true,  factor:0.03125, offset:0 },
+    Setpoint_App_Q_A:    { start:32, len:16, signed:true,  factor:0.03125, offset:0 },
+  },
+  0x468: {
+    Torque_Est_Nm: { start:16, len:16, signed:true,  factor:1, offset:0 },
+  },
+  0x362: {
+    Torque_Nm_Req: { start:16, len:16, signed:true,  factor:1, offset:0 },
+  },
+  0x363: {
+    Speed_Req_s16:      { start:16, len:16, signed:true,  factor:1, offset:0 },
+    Torque_Lim_Neg_u16: { start:32, len:16, signed:false, factor:1, offset:0 },
+    Torque_Lim_Pos_u16: { start:48, len:16, signed:false, factor:1, offset:0 },
+  },
+  // ── BMS (Orion) ──
+  0x500: {
+    Pack_Current: { start:0,  len:16, signed:true,  factor:0.1, offset:0 },
+    Pack_DCL:     { start:16, len:16, signed:false, factor:1,   offset:0 },
+    Pack_CCL:     { start:32, len:16, signed:false, factor:1,   offset:0 },
+  },
+  0x501: {
+    // Orion_CANBUS_(2).dbc.txt: Pack_Summed_Voltage 0|16@1+ (0.01,0).
+    Pack_Summed_Voltage: { start:0, len:16, signed:false, factor:0.01, offset:0 },
+    High_Temperature:    { start:16, len:8,  signed:false, factor:1,      offset:0 },
+    Average_Temperature: { start:24, len:8,  signed:false, factor:1,      offset:0 },
+    Low_Cell_Voltage:    { start:32, len:16, signed:false, factor:0.0001, offset:0 },
+    Average_Current:     { start:48, len:16, signed:true,  factor:0.1,    offset:0 },
+  },
+};
+
+const POLE_PAIRS = 10;
+
+// 속도 환산: km/h = 기계RPM x SPEED_FACTOR
+//   erpm(0x463) -> 기계RPM 은 POLE_PAIRS(10) 로 나눈다.
+//   2026-08 기어비 변경. 무부하 지름 기준 0.02037, 타이어 처짐 3% 반영 0.01976.
+//   VCU 펌웨어가 0.01976 을 쓰므로 동일하게 맞춘다. 두 값이 다르면
+//   계기판과 텔레메트리 속도가 어긋난다.
+//   최종값은 MOTION 탭 SPEED CALIBRATION 에서 GPS 실측으로 확정할 것.
+let SPEED_FACTOR = 0.01976;
+
+const STATE_MAP = {
+  1:['INIT',''], 2:['POST',''], 3:['STANDBY','standby'], 4:['READY','ready'],
+  5:['CURRENT','active'], 6:['TORQUE','active'], 7:['SPEED','active'],
+  10:['FAULT_SOFT','fault-soft'], 11:['FAULT_HARD','fault-hard'],
+  12:['DISCHARGE','standby'], 13:['SHUTDOWN','standby'], 14:['OFF',''],
+};
+const CTRL_TYPE = { 1:'OFF', 2:'SCALAR', 3:'VECTORIAL' };
+const CTRL_MODE = { 1:'DuCyABC', 2:'DuCyDQZ', 3:'CURRENT', 4:'TORQUE', 5:'SPEED', 6:'POSITION' };
+const POS_FB    = { 1:'SimPos', 2:'Sensorless', 3:'AbsEnc', 4:'IncEnc', 5:'Resolver', 6:'xMR', 7:'BiSS' };
+
+const DEM_MAP = {
+  1:'Lost msg: setpoint', 2:'DCBus undervoltage', 3:'PwrStg overtemp',
+  4:'PwrStg temp degrade', 5:'EMCtrl fault (see FOC bits)', 6:'Task overrun',
+  7:'CAN1 BusOff', 8:'Motor overtemp', 9:'Phase current OOR',
+  10:'PwrStg temp OOR', 11:'DC Bus OOR', 12:'DP overtemp', 13:'DRV overtemp',
+  14:'Aux supply undervolt', 15:'Aux supply overvolt', 16:'Overspeed',
+  17:'Speed degrade', 18:'Motor temp degrade', 19:'Bad current offset',
+  20:'AbsEnc error', 21:'Ext temp 1 OOR', 22:'Ext temp 2 OOR',
+  23:'PMIC not ready', 24:'E2E CRC fault', 25:'E2E CNT fault',
+  26:'Invalid calibration', 27:'E2E CRC fault (2)', 28:'E2E CNT fault (2)',
+  29:'Crosscheck fault', 30:'Crosscheck torque', 31:'Wrong member',
+  32:'HW supervisor fault', 33:'KL30 undervoltage', 34:'KL30 overvoltage',
+  35:'Lost message setpoint', 36:'Torque not coherent', 37:'LV ext sensor supply fault',
+};
+
+// L1/L2 bit definitions — only latchable faults (ALIVE/ENABLE/READY excluded)
+const L1_BITS = [
+  { bit:0, id:'bit-alive',  name:'ALIVE',     latch:false },
+  { bit:1, id:'bit-enable', name:'ENABLE',    latch:false },
+  { bit:2, id:'bit-uv',     name:'UNDERVOLT', latch:true  },
+  { bit:3, id:'bit-dead',   name:'DEAD',      latch:true  },
+  { bit:4, id:'bit-disnf',  name:'DISNF',     latch:true  },
+  { bit:5, id:'bit-nopwr',  name:'NOPWR',     latch:true  },
+  { bit:6, id:'bit-ocp',    name:'OCP',       latch:true  },
+  { bit:7, id:'bit-ovp',    name:'OVP',       latch:true  },
+];
+const L2_BITS = [
+  { bit:0, id:'foc-ready',   name:'READY',     latch:false },
+  { bit:1, id:'foc-posfail', name:'POSFAIL',   latch:true  },
+  { bit:2, id:'foc-asc',     name:'ASC',       latch:true  },
+  { bit:3, id:'foc-imbal',   name:'CUR_IMBAL', latch:true  },
+];
+
+// ─────────────────────────────────────────────────────────────
+// Fault registry — key: "L1:OCP" / "L2:POSFAIL" / "L3:1"
+// each: { level, name, active, latched, count, first, last }
+// ─────────────────────────────────────────────────────────────
+const faultRegistry = new Map();
+
+function timeStr(d) {
+  return d.toLocaleTimeString('en-GB', { hour12:false });
+}
+
+function recordFault(key, level, name, isActive, now) {
+  let f = faultRegistry.get(key);
+  if (isActive) {
+    if (!f) {
+      f = { level, name, active:true, latched:true, count:0, first:now, last:now };
+      faultRegistry.set(key, f);
+    }
+    // rising edge: count only on transition from non-active to active
+    if (!f.active) { f.first = f.first || now; }
+    f.active  = true;
+    f.latched = true;
+    f.last    = now;
+  } else {
+    if (f) f.active = false;  // keep latched until ack
+  }
+}
+
+// DEM은 cyclic이라 별도 카운트 처리 (rising edge 검출)
+const demPrevActive = new Set();
+function recordDem(code, present, now) {
+  const key = 'L3:' + code;
+  let f = faultRegistry.get(key);
+  const wasActive = demPrevActive.has(code);
+
+  if (present) {
+    if (!f) {
+      f = { level:'L3', name:`0x${code.toString(16).toUpperCase().padStart(4,'0')} ${DEM_MAP[code]||'Unknown'}`,
+            active:true, latched:true, count:1, first:now, last:now };
+      faultRegistry.set(key, f);
+    } else {
+      if (!wasActive) f.count++;   // rising edge만 카운트
+      f.active  = true;
+      f.latched = true;
+      f.last    = now;
+    }
+    demPrevActive.add(code);
+  } else {
+    if (f) f.active = false;
+    demPrevActive.delete(code);
+  }
+}
+
+function ackFault(key) {
+  const f = faultRegistry.get(key);
+  if (!f) return;
+  if (f.active) return;          // 활성 중이면 ack 불가 (실제로 떠 있음)
+  faultRegistry.delete(key);
+  renderHistory();
+}
+
+function clearAllFaults() {
+  for (const [key, f] of [...faultRegistry.entries()]) {
+    if (!f.active) faultRegistry.delete(key);  // 활성 아닌 것만 제거
+  }
+  renderHistory();
+}
+
+function renderHistory() {
+  const body = document.getElementById('fhBody');
+  if (faultRegistry.size === 0) {
+    body.innerHTML = '<tr><td colspan="7"><div class="fh-empty">No faults recorded — all clear</div></td></tr>';
+    return;
+  }
+  // 정렬: active 먼저, 그 다음 레벨, 그 다음 last 최신순
+  const entries = [...faultRegistry.entries()].sort((a, b) => {
+    if (a[1].active !== b[1].active) return a[1].active ? -1 : 1;
+    if (a[1].level !== b[1].level) return a[1].level.localeCompare(b[1].level);
+    return b[1].last - a[1].last;
+  });
+
+  const rows = entries.map(([key, f]) => {
+    const rowClass = f.active ? 'fh-row-active' : 'fh-row-latched';
+    const badge = f.active
+      ? '<span class="fh-badge active">ACTIVE</span>'
+      : '<span class="fh-badge latched">PAST</span>';
+    const count = f.level === 'L3' ? ('×' + f.count) : '—';
+    const ackBtn = f.active ? '' : `<span class="fh-ack" onclick="ackFault('${key}')">✕</span>`;
+    return `<tr class="${rowClass}">
+      <td><span class="fh-level">${f.level}</span></td>
+      <td>${badge}</td>
+      <td>${f.name}</td>
+      <td>${count}</td>
+      <td>${timeStr(f.first)}</td>
+      <td>${timeStr(f.last)}</td>
+      <td>${ackBtn}</td>
+    </tr>`;
+  });
+  body.innerHTML = rows.join('');
+}
+
+// ─────────────────────────────────────────────────────────────
+// Decode
+// ─────────────────────────────────────────────────────────────
+function decode(id, bytes) {
+  const sigs = DBC[id];
+  if (!sigs) return null;
+  let raw = 0n;
+  for (let i = 0; i < Math.min(bytes.length, 8); i++) raw |= BigInt(bytes[i]) << BigInt(i*8);
+  const result = {};
+  for (const [name, s] of Object.entries(sigs)) {
+    const mask = (1n << BigInt(s.len)) - 1n;
+    let val = (raw >> BigInt(s.start)) & mask;
+    if (s.signed && (val & (1n << BigInt(s.len-1)))) val -= 1n << BigInt(s.len);
+    result[name] = Number(val) * s.factor + s.offset;
+  }
+  return result;
+}
+
+// ─────────────────────────────────────────────────────────────
+// UI helpers
+// ─────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+function flash(id) { const el=$(id); if(!el)return; el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'),250); }
+function setTemp(id, val) {
+  const el=$(id); if(!el)return;
+  const v=parseFloat(val);
+  el.innerHTML=(v>200?'--':v.toFixed(0))+'<span style="font-size:13px">°C</span>';
+  el.className='temp-value'+(v>=100?' hot':v>=80?' warn':'');
+}
+function fmt(v,d=1){ return (v===undefined||v===null)?'--':v.toFixed(d); }
+
+// ─────────────────────────────────────────────────────────────
+// Chart — dual Y-axis (current A / torque Nm), 10s rolling, OCP markers
+// ─────────────────────────────────────────────────────────────
+// Data time is the Pi's original CLOCK_MONOTONIC. PC clocks remain UI clocks only.
+let latestPiMono = null;
+function observePiMono(mono){
+  if(Number.isFinite(mono)) latestPiMono=Math.max(latestPiMono??mono,mono);
+}
+function piNowMs(){ return latestPiMono===null?0:latestPiMono*1000; }
+function piStampAt(stamp,referenceMono,mono){
+  if(typeof stamp!=='string'||!Number.isFinite(referenceMono)||!Number.isFinite(mono))return '';
+  const m=stamp.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\.(\d{3})$/);
+  if(!m)return '';
+  // Neutral calendar arithmetic preserves the Pi's displayed clock, regardless of PC timezone.
+  const base=Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6],+m[7]);
+  return new Date(base+(mono-referenceMono)*1000).toISOString().slice(0,23).replace('T',' ');
+}
+function burstMono(p,i,axis){
+  const fields=p.burst_field_mono?.[i];
+  const mono=axis===0?fields?.[0]:axis===1?fields?.[1]:p.burst_mono?.[i];
+  return Number.isFinite(mono)?mono:(Number.isFinite(p.burst_mono?.[i])?p.burst_mono[i]:null);
+}
+
+const CHART_WINDOW_MS = 10000;
+const chartData = { iq_meas:[], id_meas:[], torque:[] };
+const ocpMarkers = [];  // timestamps when OCP rising edge
+
+const canvas = document.getElementById('currentChart');
+const ctx    = canvas.getContext('2d');
+function resizeCanvas(){
+  canvas.width=canvas.offsetWidth*window.devicePixelRatio;
+  canvas.height=canvas.offsetHeight*window.devicePixelRatio;
+  ctx.scale(window.devicePixelRatio,window.devicePixelRatio);
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+function pushChartPoint(key,value,mono){
+  if(!Number.isFinite(mono))return;
+  const now=mono*1000;
+  chartData[key].push({t:now,v:value});
+  const cutoff=now-CHART_WINDOW_MS;
+  while(chartData[key].length>1 && chartData[key][0].t<cutoff) chartData[key].shift();
+}
+
+function drawChart(){
+  const W=canvas.offsetWidth, H=canvas.offsetHeight;
+  if(W===0||H===0)return;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#f8f9fb'; ctx.fillRect(0,0,W,H);
+
+  const now=piNowMs(), tStart=now-CHART_WINDOW_MS;
+  const PADL=42, PADR=46;  // left=current axis, right=torque axis
+  const plotW=W-PADL-PADR;
+
+  // current Y range (left)
+  let cMin=-5,cMax=5;
+  for(const k of ['iq_meas','id_meas'])
+    for(const p of chartData[k]){ if(p.v<cMin)cMin=p.v; if(p.v>cMax)cMax=p.v; }
+  const cPad=(cMax-cMin)*0.1||1; cMin-=cPad; cMax+=cPad;
+
+  // torque Y range (right)
+  let tqMin=-5,tqMax=5;
+  for(const p of chartData.torque){ if(p.v<tqMin)tqMin=p.v; if(p.v>tqMax)tqMax=p.v; }
+  const tqPad=(tqMax-tqMin)*0.1||1; tqMin-=tqPad; tqMax+=tqPad;
+
+  const toX=t=>PADL+((t-tStart)/CHART_WINDOW_MS)*plotW;
+  const toYc=v=>H-((v-cMin)/(cMax-cMin))*H;
+  const toYt=v=>H-((v-tqMin)/(tqMax-tqMin))*H;
+
+  // grid
+  ctx.strokeStyle='rgba(0,0,0,0.07)'; ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){ const y=(i/4)*H; ctx.beginPath(); ctx.moveTo(PADL,y); ctx.lineTo(PADL+plotW,y); ctx.stroke(); }
+
+  // zero line (current axis)
+  const zeroY=toYc(0);
+  if(zeroY>=0&&zeroY<=H){
+    ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(PADL,zeroY); ctx.lineTo(PADL+plotW,zeroY); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // left Y labels (current, A)
+  ctx.fillStyle='rgba(0,85,170,0.7)'; ctx.font='9px JetBrains Mono, monospace'; ctx.textAlign='left';
+  for(let i=0;i<=4;i++){ const v=cMax-(i/4)*(cMax-cMin); const y=(i/4)*H; ctx.fillText(v.toFixed(1)+'A',2,y+8>H?H-2:y+8); }
+  // right Y labels (torque, Nm)
+  ctx.fillStyle='rgba(204,68,0,0.8)'; ctx.textAlign='right';
+  for(let i=0;i<=4;i++){ const v=tqMax-(i/4)*(tqMax-tqMin); const y=(i/4)*H; ctx.fillText(v.toFixed(0)+'Nm',W-2,y+8>H?H-2:y+8); }
+
+  // OCP markers (vertical red lines)
+  const mcut=now-CHART_WINDOW_MS;
+  while(ocpMarkers.length && ocpMarkers[0]<mcut) ocpMarkers.shift();
+  ctx.strokeStyle='rgba(170,17,17,0.6)'; ctx.lineWidth=1.5;
+  for(const mt of ocpMarkers){
+    const x=toX(mt);
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+
+  // series
+  function drawLine(pts,toY,color,width){
+    if(pts.length<2)return;
+    ctx.strokeStyle=color; ctx.lineWidth=width; ctx.beginPath();
+    for(let i=0;i<pts.length;i++){ const x=toX(pts[i].t), y=toY(pts[i].v); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }
+    ctx.stroke();
+  }
+  drawLine(chartData.id_meas, toYc, '#888888', 1.5);
+  drawLine(chartData.iq_meas, toYc, '#0055aa', 2);
+  drawLine(chartData.torque,  toYt, '#cc4400', 2);
+}
+setInterval(drawChart, 33);
+
+// ─────────────────────────────────────────────────────────────
+// Battery charts (10s rolling): pack current + low cell voltage
+// ─────────────────────────────────────────────────────────────
+const batData = { current:[], avgcurrent:[], cellv:[], packv:[] };
+function pushBat(key, value,mono){
+  if(!Number.isFinite(mono))return;
+  const now=mono*1000;
+  batData[key].push({t:now,v:value});
+  const cutoff=now-CHART_WINDOW_MS;
+  while(batData[key].length>1 && batData[key][0].t<cutoff) batData[key].shift();
+}
+
+function makeSimpleChart(canvasId, dataKey, color, unit, zeroLine, key2, color2){
+  const cv=document.getElementById(canvasId);
+  if(!cv) return ()=>{};
+  const c=cv.getContext('2d');
+  function draw(){
+    const dpr=window.devicePixelRatio||1;
+    const W=cv.offsetWidth, H=cv.offsetHeight;
+    if(W===0||H===0) return;
+    if(cv.width!==W*dpr){ cv.width=W*dpr; cv.height=H*dpr; }
+    c.setTransform(dpr,0,0,dpr,0,0);
+    c.clearRect(0,0,W,H);
+    c.fillStyle='#f8f9fb'; c.fillRect(0,0,W,H);
+    const now=piNowMs(), tStart=now-CHART_WINDOW_MS;
+    const pts=batData[dataKey];
+    const pts2 = key2 ? batData[key2] : null;
+    let vMin=Infinity,vMax=-Infinity;
+    for(const p of pts){ if(p.v<vMin)vMin=p.v; if(p.v>vMax)vMax=p.v; }
+    if(pts2) for(const p of pts2){ if(p.v<vMin)vMin=p.v; if(p.v>vMax)vMax=p.v; }
+    if(!isFinite(vMin)){ vMin=0; vMax=1; }
+    if(zeroLine){ if(vMin>0)vMin=0; if(vMax<0)vMax=0; }
+    if(vMin===vMax){ vMin-=1; vMax+=1; }
+    const pad=(vMax-vMin)*0.1||1; vMin-=pad; vMax+=pad;
+    const PADL=46;
+    const toX=t=>PADL+((t-tStart)/CHART_WINDOW_MS)*(W-PADL-6);
+    const toY=v=>H-((v-vMin)/(vMax-vMin))*H;
+    // grid
+    c.strokeStyle='rgba(0,0,0,0.07)'; c.lineWidth=1;
+    for(let i=0;i<=4;i++){ const y=(i/4)*H; c.beginPath(); c.moveTo(PADL,y); c.lineTo(W,y); c.stroke(); }
+    // zero line
+    if(zeroLine){
+      const zy=toY(0);
+      if(zy>=0&&zy<=H){ c.strokeStyle='rgba(0,0,0,0.18)'; c.setLineDash([4,4]); c.beginPath(); c.moveTo(PADL,zy); c.lineTo(W,zy); c.stroke(); c.setLineDash([]); }
+    }
+    // labels
+    c.fillStyle='rgba(0,0,0,0.45)'; c.font='9px monospace'; c.textAlign='left';
+    for(let i=0;i<=4;i++){ const v=vMax-(i/4)*(vMax-vMin); const y=(i/4)*H; c.fillText(v.toFixed(unit==='V'?3:0)+unit,3,(y+8>H?H-2:y+8)); }
+    // line
+    if(pts.length>=2){
+      c.strokeStyle=color; c.lineWidth=2; c.beginPath();
+      for(let i=0;i<pts.length;i++){ const x=toX(pts[i].t), y=toY(pts[i].v); i===0?c.moveTo(x,y):c.lineTo(x,y); }
+      c.stroke();
+    }
+    // 보조 계열 (Average Current)
+    if(pts2 && pts2.length>=2){
+      c.strokeStyle=color2; c.lineWidth=2; c.setLineDash([]); c.beginPath();
+      for(let i=0;i<pts2.length;i++){ const x=toX(pts2[i].t), y=toY(pts2[i].v); i===0?c.moveTo(x,y):c.lineTo(x,y); }
+      c.stroke();
+    }
+  }
+  return draw;
+}
+const drawBatCurrent = makeSimpleChart('batCurrentChart','current','#0055aa','A',true,'avgcurrent','#cc4400');
+const drawBatVolt    = makeSimpleChart('batVoltChart','cellv','#1a6b2a','V',false);
+const drawBatPackVolt = makeSimpleChart('batPackVoltChart','packv','#0055aa','V',false);
+setInterval(()=>{ if(currentView==='bat'){ drawBatCurrent(); drawBatVolt(); drawBatPackVolt(); } }, 33);
+
+// ─────────────────────────────────────────────────────────────
+// View toggle (INVERTER / BATTERY)
+// ─────────────────────────────────────────────────────────────
+let currentView='inv';
+function setView(v){
+  currentView=v;
+  $('gridInv').style.display = (v==='inv')?'grid':'none';
+  $('gridBat').style.display = (v==='bat')?'grid':'none';
+  $('gridTrk').style.display = (v==='trk')?'block':'none';
+  $('gridMot').style.display = (v==='mot')?'grid':'none';
+  const btns={inv:'viewInv',bat:'viewBat',trk:'viewTrk',mot:'viewMot'};
+  for(const [k,id] of Object.entries(btns)){
+    const b=$(id); if(!b) continue;
+    if(k===v){ b.style.background='var(--accent)'; b.style.color='#fff'; }
+    else     { b.style.background='var(--bg2)';    b.style.color='var(--text)'; }
+  }
+  if(v==='trk'){ requestAnimationFrame(()=>{ resizeTrack(); if(view.auto) fitView(true); drawTrack(); renderLapList(); }); }
+  if(v==='mot'){ requestAnimationFrame(()=>{ resizeMot(); drawGG(); drawTS(); }); }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Message rate
+// ─────────────────────────────────────────────────────────────
+let msgCount=0;
+setInterval(()=>{ $('msgRate').textContent=msgCount; msgCount=0; }, 1000);
+
+// live DEM display
+function renderDemLive(activeList){
+  const el=$('demLive');
+  if(activeList.length===0){ el.innerHTML='<span style="color:var(--green)">OK</span>'; return; }
+  el.innerHTML=activeList.map(c=>{
+    const hex='0x'+c.toString(16).toUpperCase().padStart(4,'0');
+    return `<div style="color:var(--red)">${hex} ${DEM_MAP[c]||'Unknown'}</div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────────────────────
+// Recording (browser-side, saves CSV to PC)
+// ─────────────────────────────────────────────────────────────
+let recording = false;
+let recRows   = [];
+let recStart  = null;
+let recTimer  = null;
+
+function toggleRec() {
+  const btn = document.getElementById('recBtn');
+  const tEl = document.getElementById('recTime');
+  if (!recording) {
+    recording = true;
+    recRows   = [];
+    recStart  = Date.now();
+    btn.textContent = '■ STOP';
+    btn.style.background = 'var(--red)';
+    btn.style.color = '#fff';
+    tEl.style.display = 'inline';
+    recTimer = setInterval(() => {
+      const sec = Math.floor((Date.now() - recStart) / 1000);
+      const m = String(Math.floor(sec/60)).padStart(2,'0');
+      const s = String(sec%60).padStart(2,'0');
+      tEl.textContent = `${m}:${s} (${recRows.length})`;
+    }, 500);
+  } else {
+    recording = false;
+    clearInterval(recTimer);
+    btn.textContent = '● REC';
+    btn.style.background = 'var(--bg2)';
+    btn.style.color = 'var(--red)';
+    tEl.style.display = 'none';
+
+    if (recRows.length === 0) { alert('No data recorded.'); return; }
+    let name = prompt('저장할 파일 이름:', 'run_' + new Date().toISOString().slice(0,16).replace(/[:T]/g,'-'));
+    if (name === null) return;  // 취소
+    if (!name.endsWith('.csv')) name += '.csv';
+
+    const header = 'timestamp,can_id,data_hex,mono\n';
+    const body   = recRows.join('\n');
+    const blob   = new Blob([header + body], { type:'text/csv' });
+    const a      = document.createElement('a');
+    a.href       = URL.createObjectURL(blob);
+    a.download   = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// REC 확장 — IMU/GPS/랩을 가상 CAN ID 로 같은 CSV 에 기록
+//   0x900 이상은 표준 CAN ID 범위(0x7FF)를 넘으므로 실제 프레임과 충돌 불가.
+//   앞 세 열을 유지하고 mono 열을 추가합니다. player.html 호환은 별도 확인이 필요합니다.
+// ─────────────────────────────────────────────────────────────
+const VID = { ACC:0x900, GYR:0x901, ATT:0x902, POS:0x903, GPS:0x904, LAP:0x905 };
+
+// Intel(little-endian) 바이트 패킹. [[값, 바이트수], ...]
+function packLE(list){
+  const out=[];
+  for(const [v,n] of list){
+    let x=Math.round(v);
+    if(x<0) x+=Math.pow(2,n*8);
+    x=Math.max(0,Math.min(Math.pow(2,n*8)-1,x));
+    for(let i=0;i<n;i++) out.push(Math.floor(x/Math.pow(2,8*i))&0xFF);
+  }
+  return out.map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function tsStr(ms){
+  const d=new Date(ms), p=(v,n=2)=>String(v).padStart(n,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} `
+       + `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(),3)}`;
+}
+function recRow(stamp,id,hex,mono){
+  recRows.push(`${stamp},0x${id.toString(16)},${hex},${Number.isFinite(mono)?mono.toFixed(6):''}`);
+}
+
+// Same payload/axis conversion as last year; only source acquisition time is corrected.
+function recImu(p){
+  if(!recording)return;
+  const b=p.burst||[];
+  for(let i=0;i<b.length;i++){
+    const v=mapAxes(b[i]);
+    const accMono=burstMono(p,i,0),gyrMono=burstMono(p,i,1);
+    recRow(piStampAt(p.timestamp,p.mono,accMono),VID.ACC,packLE([[v[0]*1000,2],[v[1]*1000,2],[v[2]*1000,2],[0,2]]),accMono);
+    recRow(piStampAt(p.timestamp,p.mono,gyrMono),VID.GYR,packLE([[v[3]*10,2],[0,2],[0,2],[0,2]]),gyrMono);
+  }
+  if(p.roll!=null){
+    const mono=p.field_mono?.angle??p.mono;
+    recRow(piStampAt(p.timestamp,p.mono,mono),VID.ATT,packLE([[p.roll*100,2],[p.pitch*100,2],[p.yaw*100,2],[(p.temp??0)*100,2]]),mono);
+  }
+  if(p.gps && p.gps.lat!=null){
+    const g=p.gps;
+    recRow(piStampAt(p.timestamp,p.mono,g.mono),VID.POS,packLE([[g.lon*1e7,4],[g.lat*1e7,4]]),g.mono);
+    const speedMono=Number.isFinite(g.speed_mono)?g.speed_mono:g.mono;
+    recRow(piStampAt(p.timestamp,p.mono,speedMono),VID.GPS,packLE([[(g.speed??0)*100,2],[(g.course??0)*100,2],
+                                  [p.sats??0,1],[(p.hdop??0)*10,1],[(g.alt??0)*10,2]]),speedMono);
+  }
+}
+function recLap(lapNo,lapSec,mono){
+  if(!recording)return;
+  recRow(piStampAt(latest.timestamp,latest.mono,mono),VID.LAP,
+         packLE([[lapNo,2],[lapSec*1000,4],[1,1],[0,1]]),mono);
+}
+function recordPacket(pkt){
+  if(!recording)return;
+  const hex=pkt.data.map(b=>b.toString(16).padStart(2,'0')).join('');
+  recRow(pkt.ts,pkt.id,hex,pkt.mono);
+}
+
+// ─────────────────────────────────────────────────────────────
+// TRACK / MOTION  (type === 'imu')
+// ─────────────────────────────────────────────────────────────
+const LAP_COLORS = ['#0055aa','#cc4400','#1a6b2a','#8800aa','#b35c00',
+                    '#0088aa','#aa1111','#556600','#aa0077','#004488'];
+const STOP_KMH   = 1.8;    // 이 속도 미만이면 정지로 보고 점을 찍지 않는다
+const SF_HALF_W  = 15;     // S/F 게이트 반폭 (m)
+const SF_DEBOUNCE= 10;     // 랩 최소 간격 (s)
+const GG_KEEP    = 250;    // g-g 잔상 (50Hz x 5s)
+const TS_KEEP    = 1500;   // 시계열 (50Hz x 30s)
+
+let laps = [], curLap = null, lapSeq = 0;
+let origin = null;                    // {lat, lon}  로컬 미터 투영 기준
+let sf = null;                        // {c:{x,y}, h:{x,y}, a:{x,y}, b:{x,y}}
+let autoLap = false, lastCross = -1e9;
+let prevPt = null;                    // 직전 GPS 점 (게이트 교차 판정용)
+let view = { cx:0, cy:0, ppm:2, auto:true };   // ppm = px per meter (CSS px)
+let ggBuf = [], tsBuf = [];
+
+// ── 축 매핑 ──────────────────────────────────────────────────
+// 센서 원본 burst = [ax, ay, az, wx, wy, wz]
+// 기본값: 모듈을 눕히고(Z 상방) X 를 차량 전방으로 장착한 경우.
+//   LONG = +ax,  LAT = -ay (Y 가 좌측이므로 우측 + 로 뒤집음),  VERT = +az,  YAW = -wz
+const AXOPT = [['+X',0,1],['-X',0,-1],['+Y',1,1],['-Y',1,-1],['+Z',2,1],['-Z',2,-1]];
+let AXIS = { long:[0,1], lat:[1,-1], vert:[2,1], yaw:[2,-1] };
+function loadAxis(){
+  try{ const s=localStorage.getItem('kai_axis'); if(s) AXIS=JSON.parse(s); }catch(e){}
+}
+function saveAxis(){ try{ localStorage.setItem('kai_axis',JSON.stringify(AXIS)); }catch(e){} }
+function initAxisUI(){
+  const mk=(sel,cur,off)=>{
+    const el=$(sel); if(!el) return;
+    el.innerHTML=AXOPT.map((o,i)=>`<option value="${i}">${o[0]}</option>`).join('');
+    el.value=AXOPT.findIndex(o=>o[1]===cur[0]&&o[2]===cur[1]);
+  };
+  mk('axLong',AXIS.long); mk('axLat',AXIS.lat); mk('axVert',AXIS.vert); mk('axYaw',AXIS.yaw);
+}
+function setAxis(){
+  const g=id=>{ const o=AXOPT[+$(id).value]; return [o[1],o[2]]; };
+  AXIS={ long:g('axLong'), lat:g('axLat'), vert:g('axVert'), yaw:g('axYaw') };
+  saveAxis(); resetPeaks(); ggBuf=[]; tsBuf=[];
+  $('axStat').textContent='적용됨';
+  setTimeout(()=>{ const e=$('axStat'); if(e) e.textContent=''; },1500);
+}
+// burst 한 샘플(6축)을 차량 축 [long, lat, vert, yaw] 으로 변환
+function mapAxes(b){
+  return [ b[AXIS.long[0]]*AXIS.long[1],
+           b[AXIS.lat[0]] *AXIS.lat[1],
+           b[AXIS.vert[0]]*AXIS.vert[1],
+           b[3+AXIS.yaw[0]]*AXIS.yaw[1] ];
+}
+function axisWizard(){
+  alert(
+  '축 확인 절차\n\n'+
+  '[벤치] 모듈을 손으로 세워서 각 축이 하늘을 향하게 한다.\n'+
+  '  하늘을 향한 축이 +1g 를 읽는다. raw 값으로 어느 축인지 확인.\n'+
+  '  · 차량 전방이 될 축을 위로 → 그 축이 +1g → LONG = 그 축의 +\n\n'+
+  '[차량] 평지에서 아래를 확인한다.\n'+
+  '  1. 정지  : VERT = +1.00 g, LONG/LAT = 0\n'+
+  '  2. 가속  : LONG 이 + 로 커짐   (안 그러면 LONG 부호 반전)\n'+
+  '  3. 제동  : LONG 이 - 로 커짐\n'+
+  '  4. 우회전: LAT 이 + , YAW 도 +  (안 그러면 각각 부호 반전)\n'+
+  '  5. 좌회전: LAT 이 - , YAW 도 -\n\n'+
+  '설정은 브라우저에 저장되어 새로고침해도 유지됩니다.');
+}
+let pkX = 0, pkY = 0;
+
+// ── 속도 환산계수 실측 보정 ──────────────────────────────────
+// 정속 구간에서만 (GPS 속도 / 기계RPM) 을 모아 중앙값을 취한다.
+// 가감속 중에는 휠스핀/락업으로 비율이 왜곡되므로 제외한다.
+let motorRpm = 0, motorKmh = 0, calSamples = [];
+const CAL_MIN_KMH = 20, CAL_MAX_ACC = 0.15, CAL_MAX_HDOP = 3, CAL_KEEP = 600;
+
+function loadFactor(){
+  try{ const v=parseFloat(localStorage.getItem('kai_speed_factor'));
+       if(isFinite(v)&&v>0) SPEED_FACTOR=v; }catch(e){}
+}
+function calMedian(){
+  if(calSamples.length<20) return null;
+  const a=calSamples.slice().sort((x,y)=>x-y);
+  return a[a.length>>1];
+}
+function feedCal(gpsKmh, hdop, accLong){
+  if(!motorRpm || motorKmh<CAL_MIN_KMH) return;
+  if(!(hdop>0 && hdop<CAL_MAX_HDOP)) return;
+  if(Math.abs(accLong??9)>CAL_MAX_ACC) return;      // 정속 구간만
+  calSamples.push(gpsKmh/motorRpm);                 // 이 비율이 곧 계수
+  if(calSamples.length>CAL_KEEP) calSamples.shift();
+}
+function applyCal(){
+  const m=calMedian();
+  if(m===null){ alert('표본이 부족합니다. 20 km/h 이상 정속 주행이 필요합니다.'); return; }
+  SPEED_FACTOR=m;
+  try{ localStorage.setItem('kai_speed_factor', String(m)); }catch(e){}
+  alert(`환산계수를 ${m.toFixed(5)} 로 적용했습니다.\nVCU 펌웨어에도 동일하게 반영하세요.`);
+}
+function resetCal(){ calSamples=[]; }
+let imuCount = 0, imuLastT = 0;
+let latest = {};
+
+// ── 좌표 투영 (등거리 원통, 국소 근사) ───────────────────────
+function projXY(lat, lon){
+  if(!origin) origin = {lat, lon, k:Math.cos(lat*Math.PI/180)};
+  return { x:(lon-origin.lon)*111320*origin.k, y:(lat-origin.lat)*111320 };
+}
+
+// ── 랩 관리 ──────────────────────────────────────────────────
+function newLap(t){
+  lapSeq++;
+  curLap = { id:lapSeq, color:LAP_COLORS[(lapSeq-1)%LAP_COLORS.length],
+             pts:[], tStart:t, tEnd:null, visible:true };
+  laps.push(curLap);
+  renderLapList();
+}
+function closeLap(t){
+  if(!curLap || curLap.pts.length<2){ if(curLap) curLap.tStart=t; return; }
+  curLap.tEnd = t;
+  recLap(curLap.id, lapTime(curLap),t);
+  invalidateStatic();
+  newLap(t);
+}
+function manualLap(){
+  const t = latest.mono;
+  if(!Number.isFinite(t))return;
+  if(!curLap) newLap(t); else closeLap(t);
+  renderLapList();
+}
+function clearAllLaps(){
+  if(!confirm('모든 랩을 지웁니다. 계속할까요?')) return;
+  laps=[]; curLap=null; lapSeq=0; prevPt=null; origin=null;
+  view.auto=true; invalidateStatic(); renderLapList(); drawTrack();
+}
+function deleteLap(id){
+  const i = laps.findIndex(l=>l.id===id); if(i<0) return;
+  if(laps[i]===curLap) curLap=null;
+  laps.splice(i,1); invalidateStatic(); renderLapList(); drawTrack();
+}
+function toggleLapVis(id){
+  const l = laps.find(x=>x.id===id); if(!l) return;
+  l.visible=!l.visible; invalidateStatic(); renderLapList(); drawTrack();
+}
+function lapTime(l){ return (l.tEnd??latest.mono??l.tStart) - l.tStart; }
+function fmtLap(s){
+  if(s===null||s===undefined||!isFinite(s)) return '--:--.-';
+  const m=Math.floor(s/60), r=s-m*60;
+  return `${m}:${r.toFixed(1).padStart(4,'0')}`;
+}
+function bestLap(){
+  const done = laps.filter(l=>l.tEnd!==null);
+  return done.length ? done.reduce((a,b)=>lapTime(a)<lapTime(b)?a:b) : null;
+}
+
+function renderLapList(){
+  const el=$('lapList'); if(!el) return;
+  const best=bestLap();
+  el.innerHTML = laps.slice().reverse().map(l=>{
+    const run = (l===curLap && l.tEnd===null);
+    const isBest = best && l.id===best.id;
+    return `<div class="lap-row ${run?'running':''} ${l.visible?'':'hidden-lap'}">
+      <div class="lap-sw" style="background:${l.color}"></div>
+      <div class="lap-no">${l.id}</div>
+      <div class="lap-t ${isBest?'lap-best':''}">${run?'● '+fmtLap(lapTime(l)):fmtLap(lapTime(l))}</div>
+      <button class="lap-ico" title="show/hide" onclick="toggleLapVis(${l.id})">${l.visible?'◉':'○'}</button>
+      <button class="lap-ico" title="delete" onclick="deleteLap(${l.id})">✕</button>
+    </div>`;
+  }).join('') || '<div style="padding:14px;font-family:var(--mono);font-size:11px;color:var(--muted)">no laps yet</div>';
+  const b=$('tBestLap'); if(b) b.textContent = best?fmtLap(lapTime(best)):'--:--.-';
+  const done=laps.filter(l=>l.tEnd!==null);
+  const ll=$('tLastLap'); if(ll) ll.textContent = done.length?fmtLap(lapTime(done[done.length-1])):'--:--.-';
+}
+
+// ── S/F 게이트 ───────────────────────────────────────────────
+function setSF(){
+  if(!prevPt || !curLap || curLap.pts.length<2){ alert('GPS 점이 더 필요합니다. 잠시 주행 후 다시 누르세요.'); return; }
+  const p = curLap.pts[curLap.pts.length-1], q = curLap.pts[curLap.pts.length-2];
+  let hx=p.x-q.x, hy=p.y-q.y;
+  const L=Math.hypot(hx,hy);
+  if(L<0.2){ alert('진행 방향을 알 수 없습니다. 움직이는 중에 누르세요.'); return; }
+  hx/=L; hy/=L;
+  const px=-hy, py=hx;                       // 진행 방향에 수직
+  sf = { c:{x:p.x,y:p.y}, h:{x:hx,y:hy},
+         a:{x:p.x+px*SF_HALF_W, y:p.y+py*SF_HALF_W},
+         b:{x:p.x-px*SF_HALF_W, y:p.y-py*SF_HALF_W} };
+  lastCross = latest.mono ?? 0;
+  $('sfStat').textContent = `S/F set (±${SF_HALF_W} m)`;
+  invalidateStatic(); drawTrack();
+}
+function toggleAuto(){
+  if(!sf && !autoLap){ alert('먼저 SET S/F 로 기준선을 지정하세요.'); return; }
+  autoLap=!autoLap;
+  const b=$('btnAuto'); b.textContent = autoLap?'AUTO ●':'AUTO ○';
+  b.classList.toggle('on', autoLap);
+}
+// 선분 P1->P2 가 게이트 A-B 를 정방향 통과하는지. 통과 시 0~1 비율 반환.
+function crossFrac(p1,p2){
+  if(!sf) return null;
+  const d1={x:p2.x-p1.x, y:p2.y-p1.y};
+  if(d1.x*sf.h.x + d1.y*sf.h.y <= 0) return null;      // 역방향 통과 무시
+  const d2={x:sf.b.x-sf.a.x, y:sf.b.y-sf.a.y};
+  const den=d1.x*d2.y - d1.y*d2.x;
+  if(Math.abs(den)<1e-9) return null;
+  const ex=sf.a.x-p1.x, ey=sf.a.y-p1.y;
+  const t=(ex*d2.y - ey*d2.x)/den;
+  const u=(ex*d1.y - ey*d1.x)/den;
+  return (t>=0&&t<=1&&u>=0&&u<=1) ? t : null;
+}
+
+// ── GPS 점 수신 ──────────────────────────────────────────────
+function addGpsPoint(g){
+  const kmh = g.speed ?? 0;
+  const xy = projXY(g.lat, g.lon);
+  const pt = { x:xy.x, y:xy.y, lat:g.lat, lon:g.lon, mono:g.mono, speed:kmh };
+  if(!curLap) newLap(g.mono);
+
+  // 자동 랩: 정지 여부와 무관하게 게이트 판정
+  if(autoLap && sf && prevPt){
+    const t = crossFrac(prevPt, pt);
+    if(t!==null && (g.mono - lastCross) > SF_DEBOUNCE){
+      const tc = prevPt.mono + t*(pt.mono - prevPt.mono);
+      const xc = prevPt.x + t*(pt.x-prevPt.x), yc = prevPt.y + t*(pt.y-prevPt.y);
+      curLap.pts.push({x:xc,y:yc,mono:tc,speed:kmh});   // 교차점으로 랩 마감
+      closeLap(tc);
+      curLap.pts.push({x:xc,y:yc,mono:tc,speed:kmh});   // 다음 랩 시작점
+      lastCross = tc;
+    }
+  }
+  prevPt = pt;
+
+  // 정지 중에는 GPS 노이즈만 쌓이므로 점을 찍지 않는다 (거리 필터 아님)
+  if(kmh >= STOP_KMH) curLap.pts.push(pt);
+
+  if(view.auto) fitView(true);
+}
+
+// ── 뷰 / 렌더 ────────────────────────────────────────────────
+function visLaps(){ return laps.filter(l=>l.visible && l.pts.length); }
+function invalidateStatic(){ staticKey=''; }
+function fitView(silent){
+  const ls=visLaps(); if(!ls.length) return;
+  let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+  for(const l of ls) for(const p of l.pts){
+    if(p.x<x0)x0=p.x; if(p.x>x1)x1=p.x; if(p.y<y0)y0=p.y; if(p.y>y1)y1=p.y;
+  }
+  const c=$('trackCv'); if(!c) return;
+  const W=c.clientWidth||600, H=c.clientHeight||400, PAD=0.08;
+  const w=Math.max(x1-x0,10), hgt=Math.max(y1-y0,10);
+  view.cx=(x0+x1)/2; view.cy=(y0+y1)/2;
+  view.ppm=Math.min(W*(1-PAD*2)/w, H*(1-PAD*2)/hgt);
+  if(!silent) view.auto=true;
+  drawTrack();
+}
+function zoomBy(f){ view.ppm*=f; view.auto=false; drawTrack(); }
+
+function resizeTrack(){
+  const c=$('trackCv'); if(!c) return;
+  const r=c.getBoundingClientRect();
+  c.width=Math.max(1,r.width*devicePixelRatio);
+  c.height=Math.max(1,r.height*devicePixelRatio);
+  staticCv.width=c.width; staticCv.height=c.height;
+  staticKey='';                       // 크기 변경 -> 정적 레이어 무효화
+}
+
+// 완주 랩은 변하지 않으므로 오프스크린에 한 번만 그려 재사용한다.
+// 매 프레임 전체 랩을 다시 그리면 점이 쌓일수록 선형으로 무거워진다.
+const staticCv = document.createElement('canvas');
+let staticKey = '';
+
+function viewKey(){
+  return laps.filter(l=>l.tEnd!==null).map(l=>l.id+(l.visible?'v':'h')+l.pts.length).join(',')
+       + `|${view.cx.toFixed(2)},${view.cy.toFixed(2)},${view.ppm.toFixed(4)}`
+       + `|${sf?'sf':''}`;
+}
+
+function paintGrid(x,W,H,S,TX,TY,border,muted){
+  const P=view.ppm*S;
+  let step=1; while(step*P<60*S) step*=10;
+  if(step*P>240*S) step/=2;
+  x.strokeStyle=border; x.lineWidth=1*S; x.globalAlpha=0.45; x.beginPath();
+  const gx0=Math.floor((view.cx-W/2/P)/step)*step, gx1=view.cx+W/2/P;
+  for(let g=gx0; g<=gx1; g+=step){ x.moveTo(TX(g),0); x.lineTo(TX(g),H); }
+  const gy0=Math.floor((view.cy-H/2/P)/step)*step, gy1=view.cy+H/2/P;
+  for(let g=gy0; g<=gy1; g+=step){ x.moveTo(0,TY(g)); x.lineTo(W,TY(g)); }
+  x.stroke(); x.globalAlpha=1;
+  return step;
+}
+
+function drawTrack(){
+  const c=$('trackCv'); if(!c||!c.width) return;
+  const x=c.getContext('2d'), W=c.width, H=c.height, S=devicePixelRatio;
+  const cs=getComputedStyle(document.documentElement);
+  const border=cs.getPropertyValue('--border').trim(), muted=cs.getPropertyValue('--muted').trim();
+  const red=cs.getPropertyValue('--red').trim(), accent2=cs.getPropertyValue('--accent2').trim();
+  const P=view.ppm*S;
+  const TX=v=>W/2+(v-view.cx)*P, TY=v=>H/2-(v-view.cy)*P;
+
+  // ── 정적 레이어 (그리드 + 완주 랩 + S/F) : 바뀔 때만 재생성
+  const key=viewKey();
+  let step;
+  if(key!==staticKey){
+    staticKey=key;
+    const sx=staticCv.getContext('2d');
+    sx.clearRect(0,0,W,H);
+    step=paintGrid(sx,W,H,S,TX,TY,border,muted);
+    for(const l of laps){
+      if(l.tEnd===null || !l.visible || !l.pts.length) continue;
+      sx.beginPath(); sx.strokeStyle=l.color; sx.lineWidth=2*S;
+      sx.lineJoin='round'; sx.lineCap='round'; sx.globalAlpha=0.75;
+      l.pts.forEach((p,i)=> i? sx.lineTo(TX(p.x),TY(p.y)) : sx.moveTo(TX(p.x),TY(p.y)));
+      sx.stroke(); sx.globalAlpha=1;
+    }
+    if(sf){
+      sx.beginPath(); sx.strokeStyle=red; sx.lineWidth=3*S;
+      sx.moveTo(TX(sf.a.x),TY(sf.a.y)); sx.lineTo(TX(sf.b.x),TY(sf.b.y)); sx.stroke();
+      sx.fillStyle=red; sx.font=`bold ${10*S}px monospace`; sx.textAlign='left';
+      sx.fillText('S/F', TX(sf.a.x)+5*S, TY(sf.a.y));
+    }
+    staticCv._step=step;
+  }
+  step=staticCv._step??1;
+
+  x.clearRect(0,0,W,H);
+  x.drawImage(staticCv,0,0);
+
+  const vis=visLaps();
+  if(!vis.length){
+    x.fillStyle=muted; x.font=`${12*S}px monospace`; x.textAlign='center';
+    x.fillText('waiting for GPS...', W/2, H/2);
+  }
+  // 진행 중인 랩만 매 프레임 그린다 (랩당 수백 점 수준)
+  if(curLap && curLap.tEnd===null && curLap.visible && curLap.pts.length){
+    x.beginPath(); x.strokeStyle=curLap.color; x.lineWidth=3*S;
+    x.lineJoin='round'; x.lineCap='round';
+    curLap.pts.forEach((p,i)=> i? x.lineTo(TX(p.x),TY(p.y)) : x.moveTo(TX(p.x),TY(p.y)));
+    x.stroke();
+  }
+  if(prevPt){
+    x.beginPath(); x.fillStyle=accent2;
+    x.arc(TX(prevPt.x),TY(prevPt.y),5*S,0,Math.PI*2); x.fill();
+    x.strokeStyle='#fff'; x.lineWidth=1.5*S; x.stroke();
+  }
+  const bar=step*P;
+  x.strokeStyle=muted; x.lineWidth=2*S; x.beginPath();
+  x.moveTo(14*S,H-16*S); x.lineTo(14*S+bar,H-16*S);
+  x.moveTo(14*S,H-20*S); x.lineTo(14*S,H-12*S);
+  x.moveTo(14*S+bar,H-20*S); x.lineTo(14*S+bar,H-12*S); x.stroke();
+  x.fillStyle=muted; x.font=`${10*S}px monospace`; x.textAlign='left';
+  x.fillText(step>=1?`${step} m`:`${step*100} cm`, 14*S, H-24*S);
+}
+
+// 팬 / 줌
+(function(){
+  let drag=null;
+  document.addEventListener('mousedown',e=>{
+    if(e.target.id!=='trackCv') return;
+    drag={x:e.clientX,y:e.clientY,cx:view.cx,cy:view.cy}; view.auto=false;
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!drag) return;
+    view.cx=drag.cx-(e.clientX-drag.x)/view.ppm;
+    view.cy=drag.cy+(e.clientY-drag.y)/view.ppm;
+    drawTrack();
+  });
+  document.addEventListener('mouseup',()=>drag=null);
+  document.addEventListener('wheel',e=>{
+    if(e.target.id!=='trackCv') return;
+    e.preventDefault(); zoomBy(e.deltaY<0?1.12:1/1.12);
+  },{passive:false});
+})();
+
+function exportLaps(){
+  if(!laps.length){ alert('저장할 랩이 없습니다.'); return; }
+  const rows=['lap,lap_time_s,mono,lat,lon,speed_kmh'];
+  for(const l of laps){
+    const lt=(l.tEnd!==null)?lapTime(l).toFixed(3):'';
+    for(const p of l.pts)
+      rows.push(`${l.id},${lt},${p.mono.toFixed(4)},${p.lat?.toFixed(7)??''},${p.lon?.toFixed(7)??''},${(p.speed??0).toFixed(2)}`);
+  }
+  const blob=new Blob([rows.join('\n')],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`track_${new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ── MOTION 렌더 ──────────────────────────────────────────────
+function resetPeaks(){ pkX=0; pkY=0; }
+function resizeMot(){
+  for(const id of ['ggCv','tsCv']){
+    const c=$(id); if(!c) continue;
+    const r=c.getBoundingClientRect();
+    c.width=Math.max(1,r.width*devicePixelRatio);
+    c.height=Math.max(1,r.height*devicePixelRatio);
+  }
+}
+function drawGG(){
+  const c=$('ggCv'); if(!c||!c.width) return;
+  const x=c.getContext('2d'), W=c.width, H=c.height, S=devicePixelRatio;
+  const cs=getComputedStyle(document.documentElement);
+  const border=cs.getPropertyValue('--border').trim(), muted=cs.getPropertyValue('--muted').trim();
+  const accent=cs.getPropertyValue('--accent').trim(), accent2=cs.getPropertyValue('--accent2').trim();
+  x.clearRect(0,0,W,H);
+  const cx=W/2, cy=H/2, R=Math.min(W,H)/2-16*S, K=R/1.5;
+  x.font=`${9*S}px monospace`; x.textAlign='left';
+  for(let g=0.5; g<=1.5001; g+=0.5){
+    x.beginPath(); x.strokeStyle=border; x.lineWidth=1*S;
+    x.arc(cx,cy,K*g,0,Math.PI*2); x.stroke();
+    x.fillStyle=muted; x.fillText(g.toFixed(1)+'g', cx+3*S, cy-K*g+11*S);
+  }
+  x.beginPath(); x.strokeStyle=border; x.lineWidth=1*S;
+  x.moveTo(cx-R,cy); x.lineTo(cx+R,cy); x.moveTo(cx,cy-R); x.lineTo(cx,cy+R); x.stroke();
+  x.fillStyle=muted; x.textAlign='center';
+  x.fillText('ACCEL', cx, cy-R-4*S); x.fillText('BRAKE', cx, cy+R+11*S);
+  x.textAlign='right'; x.fillText('LEFT', cx-R-6*S, cy+4*S);
+  x.textAlign='left';  x.fillText('RIGHT', cx+R+6*S, cy+4*S);
+  ggBuf.forEach((p,i)=>{
+    x.globalAlpha=0.10+0.55*(i/Math.max(1,ggBuf.length-1));
+    x.beginPath(); x.fillStyle=accent2;
+    x.arc(cx+p[1]*K, cy-p[0]*K, 2*S, 0, Math.PI*2); x.fill();
+  });
+  x.globalAlpha=1;
+  const cur=ggBuf[ggBuf.length-1];
+  if(cur){ x.beginPath(); x.fillStyle=accent;
+    x.arc(cx+cur[1]*K, cy-cur[0]*K, 5.5*S, 0, Math.PI*2); x.fill(); }
+}
+function drawTS(){
+  const c=$('tsCv'); if(!c||!c.width) return;
+  const x=c.getContext('2d'), W=c.width, H=c.height, S=devicePixelRatio;
+  const cs=getComputedStyle(document.documentElement);
+  const border=cs.getPropertyValue('--border').trim(), muted=cs.getPropertyValue('--muted').trim();
+  x.clearRect(0,0,W,H);
+  const rows=[
+    {i:0, k:0, label:'LONG (accel+)', range:2.0, color:cs.getPropertyValue('--accent').trim(),  unit:'g'},
+    {i:1, k:1, label:'LAT (right+)', range:2.0, color:cs.getPropertyValue('--accent2').trim(), unit:'g'},
+    {i:2, label:'YAW (cw+)',range:150,  color:cs.getPropertyValue('--green').trim(),   unit:'°/s', k:3},
+  ];
+  const hh=H/3;
+  rows.forEach(r=>{
+    const y0=r.i*hh, mid=y0+hh/2;
+    x.strokeStyle=border; x.lineWidth=1*S; x.globalAlpha=0.7;
+    x.beginPath(); x.moveTo(0,mid); x.lineTo(W,mid); x.stroke();
+    if(r.i){ x.beginPath(); x.moveTo(0,y0); x.lineTo(W,y0); x.stroke(); }
+    x.globalAlpha=1;
+    x.fillStyle=muted; x.font=`${10*S}px monospace`; x.textAlign='left';
+    x.fillText(`${r.label}  ±${r.range}${r.unit}`, 8*S, y0+13*S);
+    if(tsBuf.length<2) return;
+    // 캔버스 폭보다 촘촘히 그려봐야 보이지 않는다. 픽셀당 1점으로 축약.
+    const stepN=Math.max(1, Math.ceil(tsBuf.length/W));
+    x.beginPath(); x.strokeStyle=r.color; x.lineWidth=1.5*S;
+    let first=true;
+    for(let i=0;i<tsBuf.length;i+=stepN){
+      const sourceTime=tsBuf[i][(r.k??r.i)===3?5:4];
+      const px=W*(sourceTime-(piNowMs()-30000))/30000;
+      const py=mid-Math.max(-1,Math.min(1,tsBuf[i][r.k??r.i]/r.range))*(hh/2-6*S);
+      first? (x.moveTo(px,py), first=false) : x.lineTo(px,py);
+    }
+    x.stroke();
+  });
+}
+
+// ── 메시지 처리 ──────────────────────────────────────────────
+function handleImu(p){
+  imuCount++; imuLastT=Date.now(); latest=p; observePiMono(p.mono);
+  recImu(p);
+  const f=(v,d=3)=>(v===undefined||v===null)?'--':v.toFixed(d);
+
+  let last=null;
+  if(p.burst && p.burst.length){
+    for(let i=0;i<p.burst.length;i++){
+      const b=p.burst[i],v=mapAxes(b);    // [long, lat, vert, yaw]
+      const accMono=burstMono(p,i,0),gyrMono=burstMono(p,i,1);
+      const point=[...v,accMono===null?null:accMono*1000,gyrMono===null?null:gyrMono*1000];
+      if(accMono!==null && gyrMono!==null){ggBuf.push(point);tsBuf.push(point);}
+      last=v;
+      if(Math.abs(v[0])>Math.abs(pkX)) pkX=v[0];
+      if(Math.abs(v[1])>Math.abs(pkY)) pkY=v[1];
+    }
+    if(ggBuf.length>GG_KEEP) ggBuf.splice(0, ggBuf.length-GG_KEEP);
+    if(tsBuf.length>TS_KEEP) tsBuf.splice(0, tsBuf.length-TS_KEEP);
+    const rb=p.burst[p.burst.length-1], ar=$('axRaw');
+    if(ar) ar.textContent=`raw  ax ${rb[0].toFixed(3)}  ay ${rb[1].toFixed(3)}  az ${rb[2].toFixed(3)}`
+                        + `   wx ${rb[3].toFixed(1)}  wy ${rb[4].toFixed(1)}  wz ${rb[5].toFixed(1)}`;
+  }
+  if(p.gps && p.gps.lat && p.gps.lon) addGpsPoint(p.gps);
+  if(p.gps && p.gps.speed!=null){
+    feedCal(p.gps.speed, p.hdop, last?last[0]:null);
+    $('calMotor').textContent=motorKmh.toFixed(1);
+    $('calGps').textContent=p.gps.speed.toFixed(1);
+    $('calErr').textContent = motorKmh>1 ? ((motorKmh-p.gps.speed)/p.gps.speed*100).toFixed(1) : '--';
+    $('calCur').textContent=SPEED_FACTOR.toFixed(5);
+    $('calN').textContent=calSamples.length;
+    const m=calMedian();
+    $('calSug').textContent = m!==null ? m.toFixed(5) : '표본 부족';
+  }
+
+  // TRACK HUD
+  const g=p.gps;
+  if(g && g.speed!==undefined && g.speed!==null)
+    $('tSpeed').innerHTML=g.speed.toFixed(1)+'<span class="card-unit">km/h</span>';
+  if(p.sats!=null) $('tSats').textContent=p.sats;
+  if(p.hdop!=null) $('tHdop').textContent=f(p.hdop,2);
+  const fx=$('tFix');
+  if(p.sats>=4 && p.hdop>0 && p.hdop<2)      { fx.textContent='GOOD'; fx.style.color='var(--green)'; }
+  else if(p.sats>=4 && p.hdop>0 && p.hdop<5) { fx.textContent='FAIR'; fx.style.color='var(--yellow)'; }
+  else if(p.sats>=4)                         { fx.textContent='POOR'; fx.style.color='var(--red)'; }
+  else                                       { fx.textContent='NO FIX'; fx.style.color='var(--red)'; }
+  $('tLapNo').textContent = curLap? curLap.id : '--';
+  if(curLap) $('tLapTime').textContent = fmtLap(lapTime(curLap));
+
+  // MOTION
+  if(last){
+    $('mAx').textContent=last[0].toFixed(4);
+    $('mAy').textContent=last[1].toFixed(4);
+    $('mAz').textContent=last[2].toFixed(4);
+    $('mWz').textContent=last[3].toFixed(2);
+    $('mAmag').textContent=Math.sqrt(last[0]**2+last[1]**2+last[2]**2).toFixed(4);
+  }
+  $('mPkX').textContent=pkX.toFixed(3)+' g'; $('mPkY').textContent=pkY.toFixed(3)+' g';
+  $('mRoll').textContent=f(p.roll,2); $('mPitch').textContent=f(p.pitch,2); $('mYaw').textContent=f(p.yaw,2);
+  if(p.temp!=null) $('mTemp').textContent=f(p.temp,2);
+  if(p.utc) $('mUtc').textContent=p.utc;
+
+  // 렌더는 rAF 루프에 위임. 메시지마다 그리면 점이 쌓일수록 급격히 무거워진다.
+  if(currentView==='trk') dirtyTrk=true;
+  else if(currentView==='mot') dirtyMot=true;
+}
+
+let dirtyTrk=false, dirtyMot=false;
+(function rafLoop(){
+  if(currentView==='trk' && dirtyTrk){ dirtyTrk=false; drawTrack(); }
+  else if(currentView==='mot' && dirtyMot){ dirtyMot=false; drawGG(); drawTS(); }
+  requestAnimationFrame(rafLoop);
+})();
+
+setInterval(()=>{
+  const r=$('mRate'); if(r) r.textContent=imuCount; imuCount=0;
+  const l=$('mLast');
+  if(l) l.textContent = imuLastT ? ((Date.now()-imuLastT)/1000).toFixed(1)+'s ago' : '--';
+  if(currentView==='trk' && curLap){
+    $('tLapTime').textContent=fmtLap(lapTime(curLap));   // DOM 재생성 없이 텍스트만
+    const rt=document.querySelector('.lap-row.running .lap-t');
+    if(rt) rt.textContent='● '+fmtLap(lapTime(curLap));
+  }
+},500);
+
+window.addEventListener('resize',()=>{
+  if(currentView==='trk'){ resizeTrack(); drawTrack(); }
+  if(currentView==='mot'){ resizeMot(); drawGG(); drawTS(); }
+});
+
+// ─────────────────────────────────────────────────────────────
+// WebSocket
+// ─────────────────────────────────────────────────────────────
+const WS_URL='ws://'+location.hostname+':8765';
+let ocpPrev=0;
+function connect(){
+  const ws=new WebSocket(WS_URL);
+  ws.onopen =()=>{ $('wsDot').className='ws-dot connected'; $('wsLabel').textContent='CONNECTED'; };
+  ws.onclose=()=>{ $('wsDot').className='ws-dot'; $('wsLabel').textContent='RECONNECTING...'; setTimeout(connect,2000); };
+  ws.onerror=()=>ws.close();
+
+  ws.onmessage=e=>{
+    const pkt=JSON.parse(e.data);
+
+    if(pkt.type==='imu'){ handleImu(pkt); return; }
+
+    // CAN 은 50Hz 로 묶여서 온다. 프레임당 메시지로 보내면
+    // 초당 1000건이 넘어 브라우저 onmessage 큐가 밀린다.
+    if(pkt.frames){
+      const n=pkt.frames.length;
+      for(let k=0;k<n;k++){
+        const fr=pkt.frames[k];
+        const hex=fr[2], bytes=new Array(hex.length>>1);
+        for(let i=0,j=0;i<hex.length;i+=2,j++) bytes[j]=parseInt(hex.substr(i,2),16);
+        handleCan({ts:fr[0], id:fr[1], data:bytes,mono:pkt.frame_mono?.[k]}, k===n-1);
+      }
+      return;
+    }
+    handleCan(pkt, true);   // 구버전 로거 호환 (단건 메시지)
+  };
+}
+
+function handleCan(pkt, isLast){
+  {
+    recordPacket(pkt);
+    observePiMono(pkt.mono);
+    const id=pkt.id, bytes=pkt.data;
+    if(isLast){
+      const rpiTs=new Date(pkt.ts).getTime();
+      if(!isNaN(rpiTs)) $('latVal').textContent=Math.abs(Date.now()-rpiTs);
+    }
+    const s=decode(id,bytes);
+    if(!s)return;
+    msgCount++;
+    $('lastUpdate').textContent=pkt.ts?.split(' ')[1]?.slice(0,8)??'--';
+
+    if(id===0x460){
+      const ms=s.Uptime_ms;
+      const h=Math.floor(ms/3600000), m=Math.floor((ms%3600000)/60000), sc=Math.floor((ms%60000)/1000);
+      $('uptimeVal').textContent=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`;
+      $('cpu0Val').textContent=fmt(s.Core_0_Load_percent,0);
+      $('cpu1Val').textContent=fmt(s.Core_1_Load_percent,0);
+    }
+
+    if(id===0x461){
+      const [lbl,cls]=STATE_MAP[Math.round(s.App_State_App)]??['UNKNOWN',''];
+      const b=$('stateBadge'); b.textContent=lbl; b.className='state-badge '+cls;
+
+      const pwr=Math.round(s.PwrStg_BitState);
+      const foc=Math.round(s.EMCtrl_FOC_BitState);
+
+      // L1 bits
+      for(const bdef of L1_BITS){
+        const on=(pwr>>bdef.bit)&1;
+        const el=$(bdef.id);
+        if(bdef.latch){
+          const key='L1:'+bdef.name;
+          recordFault(key,'L1',bdef.name,!!on,new Date(pkt.ts));
+          const f=faultRegistry.get(key);
+          el.className='bit'+(on?' active':(f&&f.latched?' latched':''));
+        } else {
+          el.className='bit'+(on?' active':'');
+        }
+      }
+      // OCP rising edge marker
+      const ocpNow=(pwr>>6)&1;
+      if(ocpNow && !ocpPrev){ if(Number.isFinite(pkt.mono))ocpMarkers.push(pkt.mono*1000); }
+      ocpPrev=ocpNow;
+
+      // L2 bits
+      for(const bdef of L2_BITS){
+        const on=(foc>>bdef.bit)&1;
+        const el=$(bdef.id);
+        if(bdef.latch){
+          const key='L2:'+bdef.name;
+          recordFault(key,'L2',bdef.name,!!on,new Date(pkt.ts));
+          const f=faultRegistry.get(key);
+          el.className='bit'+(on?' active':(f&&f.latched?' latched':''));
+        } else {
+          el.className='bit'+(on?' active':'');
+        }
+      }
+
+      // L3 DEM
+      const demCode=Math.round(s.DEM_Code);
+      recordDem(demCode, !!s.DEM_Present && demCode>0,new Date(pkt.ts));
+
+      // live DEM display (현재 present인 것만)
+      const liveActive=[];
+      for(const [key,f] of faultRegistry.entries())
+        if(f.level==='L3' && f.active){ liveActive.push(parseInt(key.split(':')[1])); }
+      renderDemLive(liveActive);
+
+      renderHistory();
+      flash('card-state'); flash('card-bits');
+    }
+
+    if(id===0x463){
+      const iq=s.Current_Q_A, idv=s.Current_D_A;
+      $('iq_num').textContent=fmt(iq);
+      $('id_num').textContent=fmt(idv);
+      $('vmod').textContent=fmt(s.Volt_Modulus_permil,0);
+      pushChartPoint('iq_meas',iq,pkt.mono); pushChartPoint('id_meas',idv,pkt.mono);
+      const erpm=Math.round(s.EMachine_Speed_erpm), rpm=Math.round(erpm/POLE_PAIRS);
+      $('erpm').textContent=erpm;
+      $('rpm').innerHTML=rpm+'<span class="card-unit">RPM</span>';
+      $('speed').innerHTML=(rpm*SPEED_FACTOR).toFixed(1)+'<span class="card-unit">km/h</span>';
+      motorRpm=rpm; motorKmh=rpm*SPEED_FACTOR;
+      flash('card-current'); flash('card-rpm');
+    }
+
+    if(id===0x464){
+      setTemp('board1Temp',s.Board_Temp_degC);
+      setTemp('board2Temp',s.PwrStg_Temp_degC);
+      setTemp('pwrTemp',s.EMachine_Temp_1_degC);
+      setTemp('mTemp1',s.EMachine_Temp_2_degC);
+      flash('card-temp');
+    }
+
+    if(id===0x465){
+      $('lvVolt').textContent=fmt(s.KL30Volt_mV/1000);
+      $('ctrlType').textContent=CTRL_TYPE[Math.round(s.Ctrl_Type_App)]??s.Ctrl_Type_App;
+      $('ctrlMode').textContent=CTRL_MODE[Math.round(s.Ctrl_Mode_App)]??s.Ctrl_Mode_App;
+      $('posFb').textContent=POS_FB[Math.round(s.PosFb_Src_App)]??s.PosFb_Src_App;
+    }
+
+    if(id===0x466){
+      $('dcVolt').innerHTML=fmt(s.DCBus_Voltage_V,0)+'<span class="card-unit">V</span>';
+      $('acPower').innerHTML=fmt(s.ACBus_Power_W,0)+' <span class="card-unit">W</span>';
+      flash('card-dcbus'); flash('card-power');
+    }
+
+    if(id===0x467){
+      $('iq_sp').textContent=fmt(s.Setpoint_App_Q_A);
+      $('id_sp').textContent=fmt(s.Setpoint_App_D_A);
+      $('torqueMaxFeas').innerHTML=fmt(s.Torque_Max_Feas_Ndm/10,1)+'<span class="card-unit">Nm</span>';
+      flash('card-setpoint'); flash('card-maxtorque');
+    }
+
+    if(id===0x468){
+      const tq=s.Torque_Est_Nm;
+      $('torque_num').textContent=fmt(tq);
+      pushChartPoint('torque',tq,pkt.mono);
+    }
+
+    if(id===0x362){ $('torqueReq').textContent=fmt(s.Torque_Nm_Req); flash('card-tlim'); }
+    if(id===0x363){
+      $('tlimPos').textContent=fmt(s.Torque_Lim_Pos_u16,0);
+      $('tlimNeg').textContent=fmt(s.Torque_Lim_Neg_u16,0);
+      flash('card-tlim');
+    }
+
+    // ── BMS 0x500 ──
+    if(id===0x500){
+      const cur=s.Pack_Current;
+      $('packCurrent').innerHTML=fmt(cur,1)+'<span class="card-unit">A</span>';
+      // 부호: 방전(+)/충전(-) — Orion 관례상 양수=방전
+      const dir=$('packCurrentDir');
+      if(cur>0.1){ dir.textContent='▲ 방전 (discharge)'; dir.style.color='var(--accent2)'; $('packCurrent').style.color='var(--accent2)'; }
+      else if(cur<-0.1){ dir.textContent='▼ 충전 (charge)'; dir.style.color='var(--green)'; $('packCurrent').style.color='var(--green)'; }
+      else { dir.textContent='— idle'; dir.style.color='var(--muted)'; $('packCurrent').style.color='var(--accent)'; }
+      $('packDCL').textContent=fmt(s.Pack_DCL,0);
+      $('packCCL').textContent=fmt(s.Pack_CCL,0);
+      pushBat('current',cur,pkt.mono);
+      flash('bcard-current');
+    }
+
+    // ── BMS 0x501 ──
+    if(id===0x501){
+      $('packVoltage').innerHTML=fmt(s.Pack_Summed_Voltage,2)+'<span class="card-unit">V</span>';
+      pushBat('packv',s.Pack_Summed_Voltage,pkt.mono); flash('bcard-packv');
+      $('batHighTemp').innerHTML=fmt(s.High_Temperature,0)+'<span style="font-size:13px">°C</span>';
+      $('batAvgTemp').innerHTML=fmt(s.Average_Temperature,0)+'<span style="font-size:13px">°C</span>';
+      const v=s.Low_Cell_Voltage;
+      $('lowCellV').innerHTML=fmt(v,3)+'<span class="card-unit">V</span>';
+      // 저전압 경고 색상 (3.2V 미만 주의, 3.0V 미만 위험)
+      const lc=$('lowCellV');
+      if(v<3.0) lc.style.color='var(--red)';
+      else if(v<3.2) lc.style.color='var(--yellow)';
+      else lc.style.color='var(--accent)';
+      pushBat('cellv',v,pkt.mono);
+      // Average Current (Orion 이동평균) — 순시값과 비교하면
+      // 순간 피크와 지속 부하를 구분할 수 있다
+      const ac=s.Average_Current;
+      if(ac!==undefined){
+        $('packAvgCurrent').textContent=fmt(ac,1);
+        pushBat('avgcurrent',ac,pkt.mono);
+      }
+      flash('bcard-cellv'); flash('bcard-current');
+    }
+  }
+}
+loadAxis(); loadFactor(); initAxisUI(); renderLapList();
+connect();
+</script>
+</body>
+</html>
